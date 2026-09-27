@@ -3,7 +3,7 @@ import wave
 
 import pytest
 from PySide6.QtCore import QBuffer, QIODevice, QObject, Signal
-from PySide6.QtMultimedia import QAudioFormat, QtAudio
+from PySide6.QtMultimedia import QAudio, QAudioFormat, QtAudio
 
 from codex_stt_tray import recorder
 from codex_stt_tray.models import AppError, ErrorCode
@@ -70,6 +70,9 @@ class Source(QObject):
 
     def error(self):
         return QtAudio.Error.NoError
+
+    def state(self):
+        return QtAudio.State.StoppedState
 
     def stop(self):
         pass
@@ -154,7 +157,8 @@ def test_old_source_error_cannot_stop_new_capture(qtbot, fake_capture, monkeypat
     capture.cancel()
 
 
-def test_native_error_state_stops_capture(qtbot, fake_capture, monkeypatch):
+@pytest.mark.parametrize("signal_state", [QtAudio.State.StoppedState, QAudio.State.StoppedState])
+def test_native_error_state_stops_capture(qtbot, fake_capture, monkeypatch, signal_state):
     class InterruptedSource(Source):
         current_error = QtAudio.Error.NoError
 
@@ -171,7 +175,8 @@ def test_native_error_state_stops_capture(qtbot, fake_capture, monkeypatch):
     capture.failed.connect(errors.append)
     capture.start()
     capture.source.current_error = QtAudio.Error.IOError
-    capture.source.stateChanged.emit(QtAudio.State.StoppedState)
+    # The native signal retains the legacy enum name; the accessor returns QtAudio.
+    capture.source.stateChanged.emit(signal_state)
     qtbot.waitUntil(lambda: len(errors) == 1)
     assert capture.source is None and not capture.pcm
     assert "Qt IOError" in errors[0].message

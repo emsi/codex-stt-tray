@@ -50,6 +50,11 @@ Audio state/error comparisons use `QtAudio`, matching the current PySide6 return
 types. The legacy `QAudio` enums compare unequal in PySide6 6.11, even for
 `NoError`. Microphone selection compares saved device ID bytes in Python;
 QComboBox's QVariant lookup does not reliably compare those bytes by value.
+The native audio state signal still advertises `QAudio::State`. Its receiver is
+an explicit argument-free Qt slot which reads `source.state()` instead of asking
+PySide to convert the signal argument. A recorder-only smoke test that imports
+legacy `QAudio` can mask the binding failure; test through application composition
+without that import as well.
 
 AudioClip and Transcript hide their payloads from repr. Structured AppError
 contains a stable code, safe message, stage, retryability and optional HTTP status.

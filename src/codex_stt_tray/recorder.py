@@ -3,7 +3,7 @@
 import io
 import wave
 
-from PySide6.QtCore import QElapsedTimer, QObject, QTimer, Signal
+from PySide6.QtCore import QElapsedTimer, QObject, QTimer, Signal, Slot
 from PySide6.QtMultimedia import QAudioFormat, QAudioSource, QMediaDevices, QtAudio
 
 from .constants import MAX_AUDIO_BYTES, MAX_RECORDING_SECONDS
@@ -127,12 +127,16 @@ class Recorder(QObject):
         if seconds >= self.duration_limit:
             self.stop()
 
-    def _audio_state(self, state):
+    @Slot()
+    def _audio_state(self):
+        # Native Qt still names this signal's argument QAudio::State. Avoid
+        # PySide's legacy enum conversion and query the canonical QtAudio state.
         source = self.sender()
         if (
             not self.starting
+            and source is not None
             and self.source is source
-            and state == QtAudio.State.StoppedState
+            and source.state() == QtAudio.State.StoppedState
             and source.error() != QtAudio.Error.NoError
         ):
             # Leave the backend's stateChanged stack before stopping its device.
