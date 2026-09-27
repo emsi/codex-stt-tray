@@ -103,7 +103,16 @@ class SettingsDialog(QDialog):
         self.microphone.addItem("System default", b"")
         for device in QMediaDevices.audioInputs():
             self.microphone.addItem(device.description(), bytes(device.id()))
-        index = self.microphone.findData(self.settings.device_id)
+        # QVariant lookup does not compare Python bytes by value in PySide6.
+        selected_id = self.settings.device_id
+        index = next(
+            (
+                i
+                for i in range(self.microphone.count())
+                if self.microphone.itemData(i) == selected_id
+            ),
+            -1,
+        )
         if index < 0:
             self.microphone.addItem(
                 "Previously selected microphone (unavailable)", self.settings.device_id

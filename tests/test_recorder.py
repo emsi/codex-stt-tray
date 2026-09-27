@@ -3,7 +3,7 @@ import wave
 
 import pytest
 from PySide6.QtCore import QBuffer, QIODevice, QObject, Signal
-from PySide6.QtMultimedia import QAudio, QAudioFormat
+from PySide6.QtMultimedia import QAudioFormat, QtAudio
 
 from codex_stt_tray import recorder
 from codex_stt_tray.models import AppError, ErrorCode
@@ -69,7 +69,7 @@ class Source(QObject):
         return self.buffer
 
     def error(self):
-        return QAudio.Error.NoError
+        return QtAudio.Error.NoError
 
     def stop(self):
         pass
@@ -126,18 +126,18 @@ def test_selected_missing_device_is_not_silently_replaced(qtbot, fake_capture):
 def test_synchronous_start_failure_emits_no_duplicate_error(qtbot, fake_capture, monkeypatch):
     class FailingSource(Source):
         def start(self):
-            self.stateChanged.emit(QAudio.State.StoppedState)
+            self.stateChanged.emit(QtAudio.State.StoppedState)
             return None
 
         def error(self):
-            return QAudio.Error.OpenError
+            return QtAudio.Error.OpenError
 
     monkeypatch.setattr(recorder, "QAudioSource", FailingSource)
     capture = Recorder()
     errors = []
     capture.failed.connect(errors.append)
     for _ in range(2):
-        with pytest.raises(AppError):
+        with pytest.raises(AppError, match="Qt OpenError"):
             capture.start()
         assert capture.source is None
     assert not errors
@@ -152,3 +152,26 @@ def test_old_source_error_cannot_stop_new_capture(qtbot, fake_capture, monkeypat
     capture._capture_failed(old)
     assert capture.source is current
     capture.cancel()
+
+
+def test_native_error_state_stops_capture(qtbot, fake_capture, monkeypatch):
+    class InterruptedSource(Source):
+        current_error = QtAudio.Error.NoError
+
+        def error(self):
+            return self.current_error
+
+        def stop(self):
+            # Qt clears the error on stop; diagnostics must snapshot it first.
+            self.current_error = QtAudio.Error.NoError
+
+    monkeypatch.setattr(recorder, "QAudioSource", InterruptedSource)
+    capture = Recorder()
+    errors = []
+    capture.failed.connect(errors.append)
+    capture.start()
+    capture.source.current_error = QtAudio.Error.IOError
+    capture.source.stateChanged.emit(QtAudio.State.StoppedState)
+    qtbot.waitUntil(lambda: len(errors) == 1)
+    assert capture.source is None and not capture.pcm
+    assert "Qt IOError" in errors[0].message

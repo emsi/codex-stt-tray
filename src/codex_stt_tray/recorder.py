@@ -4,7 +4,7 @@ import io
 import wave
 
 from PySide6.QtCore import QElapsedTimer, QObject, QTimer, Signal
-from PySide6.QtMultimedia import QAudio, QAudioFormat, QAudioSource, QMediaDevices
+from PySide6.QtMultimedia import QAudioFormat, QAudioSource, QMediaDevices, QtAudio
 
 from .constants import MAX_AUDIO_BYTES, MAX_RECORDING_SECONDS
 from .models import AppError, AudioClip, ErrorCode
@@ -91,15 +91,13 @@ class Recorder(QObject):
             self.stream = source.start()
         finally:
             self.starting = False
-        if (
-            self.source is None
-            or self.stream is None
-            or self.source.error() != QAudio.Error.NoError
-        ):
+        error = source.error()
+        if self.source is None or self.stream is None or error != QtAudio.Error.NoError:
             self.cancel()
             raise AppError(
                 ErrorCode.AUDIO_DEVICE,
-                "Cannot start microphone capture. Check the audio service and permissions, "
+                f"Cannot start microphone capture (Qt {error.name}; "
+                f"{self.rate} Hz mono Int16). Check the audio service and permissions, "
                 "or choose another microphone in Settings.",
                 "audio",
             )
@@ -134,19 +132,20 @@ class Recorder(QObject):
         if (
             not self.starting
             and self.source is source
-            and state == QAudio.State.StoppedState
-            and source.error() != QAudio.Error.NoError
+            and state == QtAudio.State.StoppedState
+            and source.error() != QtAudio.Error.NoError
         ):
             # Leave the backend's stateChanged stack before stopping its device.
             QTimer.singleShot(0, lambda: self._capture_failed(source))
 
     def _capture_failed(self, source):
         if self.source is source:
+            error = source.error()
             self.cancel()
             self.failed.emit(
                 AppError(
                     ErrorCode.AUDIO_DEVICE,
-                    "Microphone capture stopped unexpectedly.",
+                    f"Microphone capture stopped unexpectedly (Qt {error.name}).",
                     "audio",
                 )
             )

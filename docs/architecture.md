@@ -46,6 +46,10 @@ finishes, or an operation fails. Unexpected Python callback exceptions cancel
 the active operation and present a safe error without printing exception data.
 Microphone startup handles synchronous Qt error signals without destroying the
 audio source inside its start callback; delayed errors ignore obsolete sources.
+Audio state/error comparisons use `QtAudio`, matching the current PySide6 return
+types. The legacy `QAudio` enums compare unequal in PySide6 6.11, even for
+`NoError`. Microphone selection compares saved device ID bytes in Python;
+QComboBox's QVariant lookup does not reliably compare those bytes by value.
 
 AudioClip and Transcript hide their payloads from repr. Structured AppError
 contains a stable code, safe message, stage, retryability and optional HTTP status.

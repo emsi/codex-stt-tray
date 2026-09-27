@@ -1,4 +1,5 @@
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtMultimedia import QMediaDevices
 
 from codex_stt_tray.doctor import Check
 from codex_stt_tray.settings import Settings
@@ -58,3 +59,26 @@ def test_settings_are_not_changed_mid_recording(qtbot, tmp_path):
     dialog.save()
     assert settings.codex_home == original
     assert not doctor.checked and not dialog.save_button.isEnabled()
+
+
+def test_saved_microphone_is_selected_after_reopening(qtbot, monkeypatch):
+    class Device:
+        def description(self):
+            return "Synthetic USB microphone"
+
+        def id(self):
+            # Return a fresh bytes object on each enumeration, as Qt does.
+            return bytes.fromhex("01020304")
+
+    monkeypatch.setattr(QMediaDevices, "audioInputs", lambda: [Device()])
+    settings = Settings()
+    doctor = Doctor(settings)
+    dialog = SettingsDialog(settings, doctor, Controller())
+    qtbot.addWidget(dialog)
+    dialog.microphone.setCurrentIndex(1)
+    dialog.save_button.click()
+    reopened = SettingsDialog(Settings(), doctor, Controller())
+    qtbot.addWidget(reopened)
+    assert reopened.microphone.currentText() == "Synthetic USB microphone"
+    assert reopened.microphone.count() == 2
+    assert reopened.microphone.currentData() == bytes.fromhex("01020304")
