@@ -6,6 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings
 
 from .auth import codex_home
+from .constants import DEFAULT_RECORDING_SECONDS, MAX_RECORDING_SECONDS
 
 
 class Settings:
@@ -69,10 +70,13 @@ class Settings:
     @property
     def duration_limit(self) -> int:
         try:
-            return min(300, max(1, int(self.store.value("duration_limit", 300))))
+            return min(
+                MAX_RECORDING_SECONDS,
+                max(1, int(self.store.value("duration_limit", DEFAULT_RECORDING_SECONDS))),
+            )
         except (ValueError, TypeError):
-            return 300
+            return DEFAULT_RECORDING_SECONDS
 
     @duration_limit.setter
     def duration_limit(self, value: int):
-        self.store.setValue("duration_limit", min(300, max(1, value)))
+        self.store.setValue("duration_limit", min(MAX_RECORDING_SECONDS, max(1, value)))

@@ -288,6 +288,41 @@ class Doctor(QObject):
         self.current = None
         self.results = []
         self.running = False
+        self.verified_home = None
+
+    def record_transcription_success(self):
+        self.verified_home = self.settings.codex_home
+        self.results = self._with_verification(self.results)
+        self.updated.emit(self.results)
+
+    def _with_verification(self, rows):
+        rows = [row for row in rows if row.name != "Transcription"]
+        if self.settings.codex_home != self.verified_home:
+            return rows
+        rows = [
+            Check(
+                row.name,
+                "ok",
+                row.message.replace(
+                    "Transcription access is unverified.",
+                    "A real transcription succeeded in this app session.",
+                ),
+            )
+            if row.name == "HTTPS"
+            and row.status == "warning"
+            and "unauthenticated probe" in row.message
+            else row
+            for row in rows
+        ]
+        rows.append(
+            Check(
+                "Transcription",
+                "ok",
+                "Recording transcribed and copied successfully for this Codex home "
+                "during this app session.",
+            )
+        )
+        return rows
 
     def run(self):
         if self.current:
@@ -305,16 +340,16 @@ class Doctor(QObject):
 
     def _updated(self, job, rows):
         if job is self.current:
-            self.results = rows
-            self.updated.emit(rows)
+            self.results = self._with_verification(rows)
+            self.updated.emit(self.results)
 
     def _finished(self, job, rows):
         if job is self.current:
             self.current = None
-            self.results = rows
+            self.results = self._with_verification(rows)
             self.running = False
             self.running_changed.emit(False)
-            self.finished.emit(rows)
+            self.finished.emit(self.results)
 
     def _release(self, job):
         self.jobs.discard(job)

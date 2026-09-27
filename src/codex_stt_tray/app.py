@@ -49,8 +49,16 @@ def main(argv=None) -> int:
     controller.copied.connect(feedback.play)
     tray = Tray(controller, settings, app)
     doctor = Doctor(settings, app)
+    controller.copied.connect(doctor.record_transcription_success)
     dialog = SettingsDialog(settings, doctor, controller)
     tray.settings_requested.connect(dialog.open_settings)
+    tray.preference_changed.connect(dialog.refresh_preference)
+
+    def preference_changed(name):
+        if name == "device_id":
+            doctor.run()
+
+    tray.preference_changed.connect(preference_changed)
     doctor.running_changed.connect(tray.set_checking)
     doctor.finished.connect(tray.doctor_completed)
 

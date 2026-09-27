@@ -19,6 +19,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from .constants import MAX_RECORDING_SECONDS
+
 
 class SettingsDialog(QDialog):
     quit_requested = Signal()
@@ -51,7 +53,7 @@ class SettingsDialog(QDialog):
             self.volume.addItem(label, value)
         form.addRow("Completion chime", self.volume)
         self.duration = QSpinBox()
-        self.duration.setRange(1, 300)
+        self.duration.setRange(1, MAX_RECORDING_SECONDS)
         self.duration.setSuffix(" seconds")
         form.addRow("Recording limit", self.duration)
         layout.addLayout(form)
@@ -99,6 +101,26 @@ class SettingsDialog(QDialog):
 
     def load(self):
         self.home.setText(str(self.settings.codex_home))
+        self.refresh_preference("device_id")
+        self.refresh_preference("volume")
+        self.refresh_preference("duration_limit")
+        self._results(self.doctor.results)
+        self._checking(self.doctor.running)
+
+    def refresh_preference(self, name):
+        """Reflect a tray edit without overwriting unrelated, unsaved dialog fields."""
+        if name == "device_id":
+            self._load_microphones()
+        elif name == "volume":
+            index = self.volume.findData(self.settings.volume)
+            if index < 0:
+                self.volume.addItem(f"Custom ({self.settings.volume:.0%})", self.settings.volume)
+                index = self.volume.count() - 1
+            self.volume.setCurrentIndex(index)
+        elif name == "duration_limit":
+            self.duration.setValue(self.settings.duration_limit)
+
+    def _load_microphones(self):
         self.microphone.clear()
         self.microphone.addItem("System default", b"")
         for device in QMediaDevices.audioInputs():
@@ -119,14 +141,6 @@ class SettingsDialog(QDialog):
             )
             index = self.microphone.count() - 1
         self.microphone.setCurrentIndex(index)
-        index = self.volume.findData(self.settings.volume)
-        if index < 0:
-            self.volume.addItem(f"Custom ({self.settings.volume:.0%})", self.settings.volume)
-            index = self.volume.count() - 1
-        self.volume.setCurrentIndex(index)
-        self.duration.setValue(self.settings.duration_limit)
-        self._results(self.doctor.results)
-        self._checking(self.doctor.running)
 
     def open_settings(self):
         if not self.isVisible():
@@ -172,6 +186,12 @@ class SettingsDialog(QDialog):
             self.summary.setText("Checking saved configuration…")
 
     def _results(self, rows):
+        verified = any(row.name == "Transcription" and row.status == "ok" for row in rows)
+        self.notice.setText(
+            "Capture, transcription, and clipboard delivery succeeded in this app session."
+            if verified
+            else "A successful recording is still needed to verify server transcription access."
+        )
         self.copy_button.setEnabled(bool(rows))
         self.copy_button.setText("Copy report")
         self.results.clear()
@@ -198,5 +218,5 @@ class SettingsDialog(QDialog):
         self.summary.setText(
             f"Doctor found {errors} issue(s). Fix them and check again. The tray stays running."
             if errors
-            else "Readiness checks completed. Record to verify capture and transcription."
+            else "Readiness checks completed."
         )

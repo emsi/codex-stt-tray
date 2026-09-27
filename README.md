@@ -41,9 +41,15 @@ fallback. See [the contract](docs/compatibility.md).
 - Warning icon: failure; use the context menu to retry or discard.
 - Right-click: start/stop, cancel, retry, **Settings…**, **Run doctor…**, **Exit**.
 - Settings configures Codex home, microphone, recording limit, and chime volume.
+- The tray also offers quick microphone and chime choices, and recording-limit
+  presets of **3, 5, or 10 minutes**. **Custom…** opens Settings for any value
+  from **1 to 3,000 seconds** (50 minutes). Quick choices persist immediately;
+  changing the microphone reruns doctor. The default remains five minutes.
 - Closing Settings, finishing a recording, or encountering an error keeps the
   tray running. Exit explicitly from the menu (or send SIGINT/SIGTERM).
-- One recording at a time; maximum five minutes and 32 MiB.
+- One recording at a time; maximum 50 minutes. Capture uses mono 16-bit PCM
+  at up to 48 kHz, with a bounded audio payload of approximately 275 MiB.
+  WAV finalization and upload can temporarily require additional memory.
 - Audio stays in bounded memory. No recording or transcript files are written.
 - On retryable failure, the pending audio or transcript is kept in memory for
   up to five minutes, or until discarded, replaced, or the app exits.
@@ -70,6 +76,10 @@ Doctor does not record, overwrite the clipboard, or upload audio: a successful
 recording is still needed to verify microphone capture and transcription access.
 An HTTP 401 or 403 from the unauthenticated probe is a warning: the server is
 reachable, but this does not confirm or rule out authenticated transcription.
+After a real recording is transcribed and copied, doctor marks transcription
+as verified for that Codex home during the current app session, including when
+the unauthenticated probe returns 401/403. This status does not carry over to a
+different Codex home or survive an application restart.
 Use **Copy report** in Settings to copy all displayed doctor results as plain
 text for pasting into a message or issue.
 

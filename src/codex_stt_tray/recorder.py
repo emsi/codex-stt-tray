@@ -6,7 +6,12 @@ import wave
 from PySide6.QtCore import QElapsedTimer, QObject, QTimer, Signal, Slot
 from PySide6.QtMultimedia import QAudioFormat, QAudioSource, QMediaDevices, QtAudio
 
-from .constants import MAX_AUDIO_BYTES, MAX_RECORDING_SECONDS
+from .constants import (
+    DEFAULT_RECORDING_SECONDS,
+    MAX_AUDIO_BYTES,
+    MAX_RECORDING_RATE,
+    MAX_RECORDING_SECONDS,
+)
 from .models import AppError, AudioClip, ErrorCode
 
 
@@ -41,6 +46,8 @@ def selected_device(device_id: bytes = b""):
 def recording_format(device) -> QAudioFormat:
     preferred_rate = device.preferredFormat().sampleRate()
     for rate in dict.fromkeys((preferred_rate, 24000, 48000, 44100, 16000)):
+        if not 0 < rate <= MAX_RECORDING_RATE:
+            continue
         fmt = QAudioFormat()
         fmt.setSampleRate(rate)
         fmt.setChannelCount(1)
@@ -67,7 +74,7 @@ class Recorder(QObject):
         self.pcm = bytearray()
         self.rate = 24000
         self.device_id = b""
-        self.duration_limit = MAX_RECORDING_SECONDS
+        self.duration_limit = DEFAULT_RECORDING_SECONDS
         self.byte_limit = MAX_AUDIO_BYTES - 44
         self.clock = QElapsedTimer()
         self.timer = QTimer(self, interval=100)
@@ -75,7 +82,7 @@ class Recorder(QObject):
         self.devices = QMediaDevices(self)
         self.devices.audioInputsChanged.connect(self._devices_changed)
 
-    def start(self, device_id: bytes = b"", duration_limit: int = MAX_RECORDING_SECONDS):
+    def start(self, device_id: bytes = b"", duration_limit: int = DEFAULT_RECORDING_SECONDS):
         self.cancel()
         device = selected_device(device_id)
         fmt = recording_format(device)

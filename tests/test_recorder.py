@@ -6,6 +6,7 @@ from PySide6.QtCore import QBuffer, QIODevice, QObject, Signal
 from PySide6.QtMultimedia import QAudio, QAudioFormat, QtAudio
 
 from codex_stt_tray import recorder
+from codex_stt_tray.constants import MAX_AUDIO_BYTES
 from codex_stt_tray.models import AppError, ErrorCode
 from codex_stt_tray.recorder import Recorder, wav_clip
 
@@ -106,6 +107,38 @@ def test_cancel_discards_and_does_not_emit(qtbot, fake_capture):
     capture.cancel()
     capture.stop()
     assert not clips and not capture.pcm
+
+
+def test_fifty_minute_capture_is_not_cut_short_by_byte_limit(qtbot, fake_capture, monkeypatch):
+    class Device48k(Device):
+        def preferredFormat(self):
+            fmt = super().preferredFormat()
+            fmt.setSampleRate(48000)
+            return fmt
+
+        def isFormatSupported(self, fmt):
+            return fmt.sampleRate() == 48000
+
+    monkeypatch.setattr(Devices, "defaultAudioInput", Device48k)
+    capture = Recorder()
+    capture.start(duration_limit=3000)
+    assert capture.duration_limit == 3000
+    assert capture.byte_limit == 3000 * 48000 * 2
+    assert capture.byte_limit + 44 <= MAX_AUDIO_BYTES
+    capture.cancel()
+
+
+def test_high_rate_microphone_uses_bounded_speech_format():
+    class HighRateDevice(Device):
+        def preferredFormat(self):
+            fmt = super().preferredFormat()
+            fmt.setSampleRate(192000)
+            return fmt
+
+        def isFormatSupported(self, fmt):
+            return True
+
+    assert recorder.recording_format(HighRateDevice()).sampleRate() == 24000
 
 
 def test_disconnection_fails_and_cleans_up(qtbot, fake_capture, monkeypatch):

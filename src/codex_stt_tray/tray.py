@@ -1,10 +1,13 @@
 """Tray presentation only; recording and request ownership live elsewhere."""
 
+from functools import partial
+
 from PySide6.QtCore import QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QCursor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtGui import QActionGroup, QColor, QCursor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
-from .models import State
+from .models import AppError, ErrorCode, State
 
 
 def state_icon(state: State, frame: int = 0) -> QIcon:
@@ -48,6 +51,7 @@ class Tray(QSystemTrayIcon):
     quit_requested = Signal()
     settings_requested = Signal()
     doctor_requested = Signal()
+    preference_changed = Signal(str)
 
     def __init__(self, controller, settings, parent=None):
         super().__init__(parent)
@@ -63,6 +67,18 @@ class Tray(QSystemTrayIcon):
         self.retry.triggered.connect(controller.retry)
         self.discard = self.menu.addAction("Cancel / discard")
         self.discard.triggered.connect(controller.cancel)
+        self.menu.addSeparator()
+        self.quick_menus = {}
+        self.quick_groups = {}
+        for key, label in (
+            ("device_id", "Microphone"),
+            ("duration_limit", "Recording limit"),
+            ("volume", "Completion chime"),
+        ):
+            submenu = self.menu.addMenu(label)
+            self.quick_menus[key] = submenu
+            self.quick_groups[key] = QActionGroup(submenu)
+        self.menu.aboutToShow.connect(self._populate_preferences)
         self.menu.addSeparator()
         self.settings_action = self.menu.addAction("Settings…", self.settings_requested.emit)
         self.doctor_action = self.menu.addAction("Run doctor…", self.doctor_requested.emit)
@@ -82,6 +98,61 @@ class Tray(QSystemTrayIcon):
             self.controller.start_recording()
         else:
             self.controller.toggle()
+
+    def _populate_preferences(self):
+        microphones = [("System default", b"")]
+        microphones.extend((d.description(), bytes(d.id())) for d in QMediaDevices.audioInputs())
+        choices = {
+            "device_id": microphones,
+            "duration_limit": [(f"{minutes} minutes", minutes * 60) for minutes in (3, 5, 10)],
+            "volume": [("Muted", 0.0), ("Quiet", 0.1), ("Normal", 0.25)],
+        }
+        for key, items in choices.items():
+            menu = self.quick_menus[key]
+            menu.clear()
+            current = getattr(self.settings, key)
+            for label, value in items:
+                action = menu.addAction(label)
+                action.setCheckable(True)
+                action.setData(value)
+                self.quick_groups[key].addAction(action)
+                action.setChecked(value == current)
+                action.triggered.connect(partial(self._save_preference, key, value))
+            if not any(value == current for _, value in items):
+                label = {
+                    "device_id": "Selected microphone (unavailable)",
+                    "duration_limit": f"Custom: {self.settings.duration_limit} seconds",
+                    "volume": f"Custom: {self.settings.volume:.0%}",
+                }[key]
+                action = menu.addAction(label)
+                action.setCheckable(True)
+                self.quick_groups[key].addAction(action)
+                action.setChecked(True)
+                action.setEnabled(False)
+            if key == "duration_limit":
+                menu.addSeparator()
+                menu.addAction("Custom…", self.settings_requested.emit)
+
+    def _save_preference(self, key, value, _checked=False):
+        if self.controller.busy or self.controller.checking:
+            return
+        previous = getattr(self.settings, key)
+        if previous == value:
+            return
+        setattr(self.settings, key, value)
+        try:
+            self.settings.sync()
+        except OSError:
+            setattr(self.settings, key, previous)
+            self._error(
+                AppError(
+                    ErrorCode.INTERNAL,
+                    "Cannot save settings. Check permissions on the settings directory.",
+                    "settings",
+                )
+            )
+            return
+        self.preference_changed.emit(key)
 
     def _activated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -116,6 +187,8 @@ class Tray(QSystemTrayIcon):
         )
         self.discard.setEnabled(state in (State.RECORDING, State.TRANSCRIBING, State.ERROR))
         self.doctor_action.setEnabled(not busy and state != State.RECORDING and not checking)
+        for submenu in self.quick_menus.values():
+            submenu.setEnabled(not busy and state != State.RECORDING and not checking)
         self.frame = 0
         self.setIcon(state_icon(State.TRANSCRIBING if checking else state))
         if checking:

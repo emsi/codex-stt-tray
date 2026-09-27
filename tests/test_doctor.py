@@ -103,6 +103,29 @@ def test_rejected_probe_does_not_claim_transcription_access(qtbot, ready, status
     assert "Transcription access is unverified" in check.message
 
 
+def test_real_transcription_verifies_current_home_across_doctor_runs(qtbot, qapp, ready):
+    settings = SimpleNamespace(codex_home=ready, device_id=b"")
+    service = doctor.Doctor(settings, qapp)
+    service.manager = Manager([{"status": 403}, {"status": 403}, {"status": 403}])
+    service.run()
+    qtbot.waitUntil(lambda: not service.running)
+    assert next(row for row in service.results if row.name == "HTTPS").status == "warning"
+    service.record_transcription_success()
+    service.run()
+    qtbot.waitUntil(lambda: not service.running)
+    rows = {row.name: row for row in service.results}
+    assert rows["HTTPS"].status == "ok"
+    assert "real transcription succeeded" in rows["HTTPS"].message
+    assert rows["Transcription"].status == "ok"
+
+    settings.codex_home = ready / "different-home"
+    service.run()
+    qtbot.waitUntil(lambda: not service.running)
+    rows = {row.name: row for row in service.results}
+    assert rows["HTTPS"].status == "warning"
+    assert "Transcription" not in rows
+
+
 def test_reject_keyring_and_invalid_config(tmp_path):
     path = tmp_path / "config.toml"
     path.write_text('cli_auth_credentials_store = "keyring"')
