@@ -74,12 +74,11 @@ open Settings for repair and keep the app running. Checks are asynchronous
 where they involve network or child processes, and have bounded timeouts.
 Doctor does not record, overwrite the clipboard, or upload audio: a successful
 recording is still needed to verify microphone capture and transcription access.
-An HTTP 401 or 403 from the unauthenticated probe is a warning: the server is
-reachable, but this does not confirm or rule out authenticated transcription.
+The HTTPS check reports **Server reachable.** when the server responds, including
+HTTP 401/403 from the unauthenticated probe. Authentication is checked separately.
 After a real recording is transcribed and copied, doctor marks transcription
-as verified for that Codex home during the current app session, including when
-the unauthenticated probe returns 401/403. This status does not carry over to a
-different Codex home or survive an application restart.
+as verified for that Codex home during the current app session. This status does
+not carry over to a different Codex home or survive an application restart.
 Use **Copy report** in Settings to copy all displayed doctor results as plain
 text for pasting into a message or issue.
 

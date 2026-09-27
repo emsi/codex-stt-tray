@@ -62,7 +62,7 @@ def test_doctor_reports_ready_without_sending_credentials(qtbot, ready):
     assert not manager.requests[0].hasRawHeader("Authorization")
     assert not manager.requests[0].hasRawHeader("ChatGPT-Account-Id")
     assert not manager.uploads[0]
-    assert "not a transcription test" in rows["HTTPS"].message
+    assert rows["HTTPS"].message == "Server reachable."
 
 
 def test_missing_auth_and_microphone_do_not_stop_other_checks(qtbot, ready, monkeypatch):
@@ -98,9 +98,8 @@ def test_rejected_probe_does_not_claim_transcription_access(qtbot, ready, status
     job.start()
     qtbot.waitUntil(lambda: job.done)
     check = job.checks["HTTPS"]
-    assert check.status == "warning"
-    assert f"HTTP {status}" in check.message
-    assert "Transcription access is unverified" in check.message
+    assert check.status == "ok"
+    assert check.message == "Server reachable."
 
 
 def test_real_transcription_verifies_current_home_across_doctor_runs(qtbot, qapp, ready):
@@ -109,20 +108,20 @@ def test_real_transcription_verifies_current_home_across_doctor_runs(qtbot, qapp
     service.manager = Manager([{"status": 403}, {"status": 403}, {"status": 403}])
     service.run()
     qtbot.waitUntil(lambda: not service.running)
-    assert next(row for row in service.results if row.name == "HTTPS").status == "warning"
+    assert next(row for row in service.results if row.name == "HTTPS").status == "ok"
     service.record_transcription_success()
     service.run()
     qtbot.waitUntil(lambda: not service.running)
     rows = {row.name: row for row in service.results}
     assert rows["HTTPS"].status == "ok"
-    assert "real transcription succeeded" in rows["HTTPS"].message
+    assert rows["HTTPS"].message == "Server reachable."
     assert rows["Transcription"].status == "ok"
 
     settings.codex_home = ready / "different-home"
     service.run()
     qtbot.waitUntil(lambda: not service.running)
     rows = {row.name: row for row in service.results}
-    assert rows["HTTPS"].status == "warning"
+    assert rows["HTTPS"].status == "ok"
     assert "Transcription" not in rows
 
 

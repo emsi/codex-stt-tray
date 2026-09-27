@@ -227,19 +227,8 @@ class DoctorJob(QObject):
             )
         elif status >= 500:
             check = Check("HTTPS", "error", f"Server returned HTTP {status}; try again later.")
-        elif status in (401, 403):
-            check = Check(
-                "HTTPS",
-                "warning",
-                f"Server reachable, but the unauthenticated probe returned HTTP {status}. "
-                "Transcription access is unverified.",
-            )
         else:
-            check = Check(
-                "HTTPS",
-                "ok",
-                f"Server reachable (HTTP {status}). This is not a transcription test.",
-            )
+            check = Check("HTTPS", "ok", "Server reachable.")
         self._report(check, "network")
 
     def _timeout(self):
@@ -299,21 +288,6 @@ class Doctor(QObject):
         rows = [row for row in rows if row.name != "Transcription"]
         if self.settings.codex_home != self.verified_home:
             return rows
-        rows = [
-            Check(
-                row.name,
-                "ok",
-                row.message.replace(
-                    "Transcription access is unverified.",
-                    "A real transcription succeeded in this app session.",
-                ),
-            )
-            if row.name == "HTTPS"
-            and row.status == "warning"
-            and "unauthenticated probe" in row.message
-            else row
-            for row in rows
-        ]
         rows.append(
             Check(
                 "Transcription",
