@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from .constants import MAX_RECORDING_SECONDS
+from .desktop_input import PASTE_KEYS, supports_x11_input
 
 
 class SettingsDialog(QDialog):
@@ -56,6 +58,18 @@ class SettingsDialog(QDialog):
         self.duration.setRange(1, MAX_RECORDING_SECONDS)
         self.duration.setSuffix(" seconds")
         form.addRow("Recording limit", self.duration)
+        self.auto_paste = QCheckBox("Paste into the focused application after copying")
+        self.auto_paste.setEnabled(supports_x11_input())
+        form.addRow("Automatic paste", self.auto_paste)
+        self.paste_keys = QComboBox()
+        self.paste_keys.addItems(PASTE_KEYS)
+        form.addRow("Paste shortcut", self.paste_keys)
+        paste_note = QLabel(
+            "Uses the application focused when transcription finishes. "
+            "Ctrl+Shift+V is useful for terminals. X11 only in this version."
+        )
+        paste_note.setWordWrap(True)
+        form.addRow(paste_note)
         layout.addLayout(form)
         self.location = QLabel(f"Application settings: {settings.path}")
         self.location.setTextFormat(Qt.TextFormat.PlainText)
@@ -101,6 +115,8 @@ class SettingsDialog(QDialog):
 
     def load(self):
         self.home.setText(str(self.settings.codex_home))
+        self.auto_paste.setChecked(self.settings.auto_paste)
+        self.paste_keys.setCurrentText(self.settings.paste_keys)
         self.refresh_preference("device_id")
         self.refresh_preference("volume")
         self.refresh_preference("duration_limit")
@@ -161,6 +177,8 @@ class SettingsDialog(QDialog):
         self.settings.device_id = self.microphone.currentData()
         self.settings.volume = self.volume.currentData()
         self.settings.duration_limit = self.duration.value()
+        self.settings.auto_paste = self.auto_paste.isChecked()
+        self.settings.paste_keys = self.paste_keys.currentText()
         try:
             self.settings.sync()
         except OSError:

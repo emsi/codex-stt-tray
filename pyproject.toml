@@ -5,7 +5,10 @@ description = "Native Qt desktop dictation using a local Codex login"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "MIT"
-dependencies = ["PySide6>=6.9,<7"]
+dependencies = [
+    "PySide6>=6.9,<7",
+    "python-xlib>=0.33,<0.34",
+]
 
 [project.scripts]
 codex-stt-tray = "codex_stt_tray.app:main"

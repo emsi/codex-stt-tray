@@ -29,6 +29,7 @@ class ErrorCode(StrEnum):
     RESPONSE_INVALID = auto()
     RESPONSE_LIMIT = auto()
     CLIPBOARD = auto()
+    PASTE = auto()
 
 
 @dataclass

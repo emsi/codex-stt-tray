@@ -68,6 +68,23 @@ class Settings:
         self.store.setValue("volume", min(1.0, max(0.0, value)))
 
     @property
+    def auto_paste(self) -> bool:
+        return str(self.store.value("auto_paste", "false")).lower() == "true"
+
+    @auto_paste.setter
+    def auto_paste(self, value: bool):
+        self.store.setValue("auto_paste", bool(value))
+
+    @property
+    def paste_keys(self) -> str:
+        value = str(self.store.value("paste_keys", "Ctrl+V"))
+        return value if value in ("Ctrl+V", "Ctrl+Shift+V", "Shift+Insert") else "Ctrl+V"
+
+    @paste_keys.setter
+    def paste_keys(self, value: str):
+        self.store.setValue("paste_keys", value)
+
+    @property
     def duration_limit(self) -> int:
         try:
             return min(

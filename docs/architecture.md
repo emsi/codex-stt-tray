@@ -83,5 +83,10 @@ Manual checks, separately from the offline suite:
    without exiting, then save a working home and record again. Restart and check
    persistence. Close Settings after a failed check and reopen it from the tray.
 
-Global hotkeys, live transcription, alternative providers, transcript history,
-and automatic text injection are deliberately outside the initial scope.
+Optional X11 automatic paste runs after successful clipboard publication. A Qt
+timer waits for key release and checks focus and clipboard contents before
+sending XTEST events. Failure is nonfatal and never retranscribes or retries
+paste automatically. A new operation cancels pending paste. No keyboard CLI is used.
+
+Global hotkeys, live transcription, alternative providers, and transcript history
+are outside the initial scope.

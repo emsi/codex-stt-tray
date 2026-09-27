@@ -9,6 +9,7 @@ class Controller(QObject):
     changed = Signal(object)
     error_raised = Signal(object)
     copied = Signal()
+    paste_requested = Signal(str)
     status = Signal(str)
 
     def __init__(self, recorder, transcriber, clipboard, settings, parent=None):
@@ -141,9 +142,12 @@ class Controller(QObject):
         if self.closed or generation != self.generation:
             return
         self.job = None
+        text = self.transcript.text
         self.transcript = None
         self._set_state(State.COPIED)
         self.copied.emit()
+        if getattr(self.settings, "auto_paste", False):
+            self.paste_requested.emit(text)
         self.success_timer.start()
 
     def _job_failed(self, generation, error):

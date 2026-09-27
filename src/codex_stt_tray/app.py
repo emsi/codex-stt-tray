@@ -10,8 +10,10 @@ from PySide6.QtWidgets import QApplication
 from . import __version__
 from .clipboard import Clipboard
 from .controller import Controller
+from .desktop_input import AutoPaste
 from .doctor import Doctor
 from .feedback import Feedback
+from .models import State
 from .recorder import Recorder
 from .settings import Settings
 from .settings_dialog import SettingsDialog
@@ -48,6 +50,10 @@ def main(argv=None) -> int:
     feedback = Feedback(settings, app)
     controller.copied.connect(feedback.play)
     tray = Tray(controller, settings, app)
+    auto_paste = AutoPaste(settings, app)
+    controller.paste_requested.connect(auto_paste.request)
+    controller.changed.connect(lambda state: auto_paste.cancel() if state != State.COPIED else None)
+    auto_paste.failed.connect(tray._error)
     doctor = Doctor(settings, app)
     controller.copied.connect(doctor.record_transcription_success)
     dialog = SettingsDialog(settings, doctor, controller)
@@ -84,6 +90,7 @@ def main(argv=None) -> int:
         closing = True
         tray.hide()
         dialog.hide()
+        auto_paste.shutdown()
         controller.shutdown()
         doctor.shutdown()
         quit_when_idle()

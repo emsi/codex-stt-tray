@@ -16,8 +16,9 @@ uv build
 ```
 
 Python is pinned to 3.13 for development; the package requires Python >=3.13.
-The lockfile records the dependency versions. PySide6 is the only runtime dependency.
+The lockfile records the dependency versions. PySide6 provides the application framework.
 Linux desktop Qt libraries and a working audio server are also required.
+python-xlib provides native X11 keyboard integration.
 
 ## Authentication
 
@@ -41,6 +42,10 @@ fallback. See [the contract](docs/compatibility.md).
 - Warning icon: failure; use the context menu to retry or discard.
 - Right-click: start/stop, cancel, retry, **Settings…**, **Run doctor…**, **Exit**.
 - Settings configures Codex home, microphone, recording limit, and chime volume.
+- Optional automatic paste sends Ctrl+V, Ctrl+Shift+V, or Shift+Insert to the
+  focused application after copying. It is disabled by default and currently
+  supports X11 only. If focus or clipboard contents change while waiting for
+  held keys to be released, paste is skipped. Clipboard copying still succeeds.
 - The tray also offers quick microphone and chime choices, and recording-limit
   presets of **3, 5, or 10 minutes**. **Custom…** opens Settings for any value
   from **1 to 3,000 seconds** (50 minutes). Quick choices persist immediately;

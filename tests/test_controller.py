@@ -149,3 +149,16 @@ def test_shutdown_cancels_job_and_ignores_callbacks(qtbot):
     c.toggle()
     assert not c.clipboard.jobs and c.transcriber.closed
     assert job.cancelled and c.recorder.starts == 1
+
+
+def test_auto_paste_requested_only_after_successful_copy(qtbot):
+    c = controller()
+    c.settings.auto_paste = True
+    requested = []
+    c.paste_requested.connect(requested.append)
+    record(c).succeeded.emit(Transcript("synthetic text"))
+    assert not requested
+    c.clipboard.jobs[-1].succeeded.emit(None)
+    assert requested == ["synthetic text"]
+    assert c.state == State.COPIED and c.transcript is None
+    c.cancel()
