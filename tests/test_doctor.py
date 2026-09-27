@@ -91,6 +91,18 @@ def test_doctor_deadline(qtbot, ready):
     assert job.checks["HTTPS"].status == "error"
 
 
+@pytest.mark.parametrize("status", [401, 403])
+def test_rejected_probe_does_not_claim_transcription_access(qtbot, ready, status):
+    manager = Manager([{"status": status, "payload": b""}])
+    job = DoctorJob(manager, ready, b"")
+    job.start()
+    qtbot.waitUntil(lambda: job.done)
+    check = job.checks["HTTPS"]
+    assert check.status == "warning"
+    assert f"HTTP {status}" in check.message
+    assert "Transcription access is unverified" in check.message
+
+
 def test_reject_keyring_and_invalid_config(tmp_path):
     path = tmp_path / "config.toml"
     path.write_text('cli_auth_credentials_store = "keyring"')

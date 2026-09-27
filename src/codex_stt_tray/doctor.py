@@ -227,6 +227,13 @@ class DoctorJob(QObject):
             )
         elif status >= 500:
             check = Check("HTTPS", "error", f"Server returned HTTP {status}; try again later.")
+        elif status in (401, 403):
+            check = Check(
+                "HTTPS",
+                "warning",
+                f"Server reachable, but the unauthenticated probe returned HTTP {status}. "
+                "Transcription access is unverified.",
+            )
         else:
             check = Check(
                 "HTTPS",
