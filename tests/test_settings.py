@@ -1,0 +1,43 @@
+from pathlib import Path
+
+from PySide6.QtCore import QSettings
+
+from codex_stt_tray.settings import Settings
+
+
+def test_dedicated_directory_and_home_precedence(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "prefs"))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "environment"))
+    settings = Settings()
+    assert settings.path == tmp_path / "prefs/codex-stt-tray/settings.ini"
+    assert settings.codex_home == tmp_path / "environment"
+    settings.codex_home = tmp_path / "selected"
+    settings.volume = 0.25
+    settings.sync()
+    loaded = Settings()
+    assert loaded.codex_home == tmp_path / "selected"
+    assert loaded.volume == 0.25
+    assert settings.path.stat().st_mode & 0o777 == 0o600
+    loaded.codex_home = ""
+    assert loaded.codex_home == tmp_path / "environment"
+
+
+def test_legacy_preferences_migrate_without_auth(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    legacy = QSettings(
+        str(tmp_path / "codex-stt-tray/codex-stt-tray.conf"), QSettings.Format.IniFormat
+    )
+    legacy.setValue("volume", 0.25)
+    legacy.setValue("microphone", b"synthetic device".hex())
+    legacy.setValue("unrelated", "not migrated")
+    legacy.sync()
+    settings = Settings()
+    assert settings.volume == 0.25 and settings.device_id == b"synthetic device"
+    assert not settings.store.contains("unrelated")
+    settings.sync()
+
+
+def test_relative_xdg_path_is_not_used(tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", "relative")
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    assert Settings().directory == tmp_path / ".config/codex-stt-tray"

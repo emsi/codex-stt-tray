@@ -1,0 +1,32 @@
+[project]
+name = "codex-stt-tray"
+version = "0.1.0"
+description = "Native Qt desktop dictation using a local Codex login"
+readme = "README.md"
+requires-python = ">=3.13"
+license = "MIT"
+dependencies = ["PySide6>=6.9,<7"]
+
+[project.scripts]
+codex-stt-tray = "codex_stt_tray.app:main"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-qt>=4.4", "ruff>=0.11"]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/codex_stt_tray"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyside6"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]

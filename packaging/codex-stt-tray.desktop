@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Codex STT Tray
+Comment=Record speech and copy its transcript to the clipboard
+Exec=codex-stt-tray
+Icon=audio-input-microphone
+Terminal=false
+Categories=AudioVideo;Audio;Utility;
+StartupNotify=false

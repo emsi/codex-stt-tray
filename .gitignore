@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+dist/
+*.egg-info/
+auth.json
+.env
+*.ogg
+*.mp3
+*.wav
+!src/codex_stt_tray/resources/complete.wav
+core
+core.*
