@@ -4,36 +4,103 @@ A small Python 3.13+ / PySide6 application for dictation on KDE Plasma.
 Click the red tray icon to record; click again to transcribe. The final text
 is copied to the clipboard, followed by a green check and a quiet chime.
 
-## Development
+## Install and run
+
+**Requires Linux with a system tray and microphone, [uv](https://docs.astral.sh/uv/getting-started/installation/),
+Git, and [Codex CLI](https://learn.chatgpt.com/docs/codex/cli).**
+KDE Plasma on X11 is the primary target. The app uses Python 3.13+; uv can install
+Python for you. Automatic paste and recording shortcuts currently require X11.
+
+### 1. Install the tray application
 
 ```sh
-uv sync --python 3.13
-uv run codex-stt-tray
-QT_QPA_PLATFORM=offscreen uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv build
+git clone https://github.com/emsi/codex-stt-tray.git
+cd codex-stt-tray
+uv tool install --python 3.13 .
 ```
 
-Python is pinned to 3.13 for development; the package requires Python >=3.13.
-The lockfile records the dependency versions. PySide6 provides the application framework.
-Linux desktop Qt libraries and a working audio server are also required.
-python-xlib provides native X11 keyboard integration.
+This installs the `codex-stt-tray` command in uv's tool environment; you do not
+need to activate a virtual environment. If the command is not on your `PATH`,
+run `uv tool update-shell` and open a new terminal.
+See [uv's tool installation guide](https://docs.astral.sh/uv/guides/tools/).
 
-## Authentication
+### 2. Set up your Codex login
 
-Install Codex CLI, configure `cli_auth_credentials_store = "file"` in its
-configuration, and sign in with your own ChatGPT account using `codex login`.
-The existing credentials must be an owned regular file with mode `0600`.
-The app does not create, copy, or edit them. Select the Codex configuration
-directory in **Settings → Codex home**. The saved value takes precedence over
-`CODEX_HOME`; with no saved value, the environment or `~/.codex` is used.
-Clear the field and save to restore that fallback. `CODEX_CLI_PATH` can specify
-the Codex executable. Keyring-only credentials are not yet supported.
+**This app needs a ChatGPT login stored in a Codex credential file.**
+Keyring-only credentials and OpenAI Platform API keys are not supported by this app.
+
+In your Codex `config.toml` (normally `~/.codex/config.toml`), add or update this
+**top-level** setting, before any `[section]` headers. Preserve your other settings:
+
+```toml
+cli_auth_credentials_store = "file"
+```
+
+Then sign in through the browser and check the login:
+
+```sh
+codex login
+codex login status
+```
+
+Choose your ChatGPT account. If you previously used keyring storage, sign in again
+after setting file storage. The app requires `auth.json` to be owned by your user
+and readable/writable only by you (`0600`). If Doctor reports a permission issue:
+
+```sh
+chmod 600 "${CODEX_HOME:-$HOME/.codex}/auth.json"
+```
+
+Codex manages the credentials; the tray app never creates, copies, or edits them.
+See [OpenAI's Codex authentication documentation](https://learn.chatgpt.com/docs/auth).
+
+Using a different Codex home? Configure `config.toml` in that directory and run
+`CODEX_HOME=/path/to/codex-home codex login`. Select the same directory under
+**Settings → Codex → Codex home** in the tray app. The saved selection overrides
+`CODEX_HOME`; clearing the field restores the environment/default behavior.
+`CODEX_CLI_PATH` can point to a Codex executable outside your desktop's `PATH`.
+
+### 3. Launch and record
+
+```sh
+codex-stt-tray
+```
+
+Doctor runs automatically on startup. Right-click the tray icon to open
+**Settings…** or **Run doctor…**. Click the red icon to start recording, then
+click again to stop and transcribe. A green check and quiet chime signal that
+copying succeeded. Closing Settings or Doctor leaves the tray running.
+
+Configure the microphone and optional start/stop shortcut under **Recording**.
+Under **Delivery**, choose CLIPBOARD, PRIMARY, or both, and optionally enable
+keyboard or middle-click paste. Automatic paste and a recording shortcut are
+both disabled until you configure them.
 
 This uses an **internal, unsupported** Codex Desktop endpoint. Access and
 compatibility are not guaranteed. There is no Platform API-key or local-model
 fallback. See [the contract](docs/compatibility.md).
+
+[Application screenshots](#screenshots) · [Desktop behavior](#desktop-behavior) ·
+[Updating and autostart](#updating-and-optional-autostart) · [Development](#development)
+
+## Screenshots
+
+Actual application widgets, rendered with Qt's Fusion style and **example X11
+preferences and Doctor results**. Your desktop theme may differ. These examples
+show automatic paste and a recording shortcut enabled; both are off by default.
+Click a screenshot to see it at full size.
+
+| Recording settings | Clipboard and paste settings |
+| --- | --- |
+| [![Recording settings: microphone, recording limit, toggle shortcut, and conservative silence trimming](docs/screenshots/settings-recording.png)](docs/screenshots/settings-recording.png) | [![Delivery settings: CLIPBOARD and PRIMARY, automatic paste, and Ctrl+Shift+V](docs/screenshots/settings-delivery.png)](docs/screenshots/settings-delivery.png) |
+
+| Codex home selection | Separate Doctor window |
+| --- | --- |
+| [![Codex settings with an example configuration directory](docs/screenshots/settings-codex.png)](docs/screenshots/settings-codex.png) | [![Doctor with example readiness checks and the Copy report button](docs/screenshots/doctor.png)](docs/screenshots/doctor.png) |
+
+The tray menu provides recording controls, quick settings, Doctor, and Exit:
+
+[![Tray context menu with microphone, recording limit, chime, Settings, Doctor, and Exit](docs/screenshots/tray-menu.png)](docs/screenshots/tray-menu.png)
 
 ## Desktop behavior
 
@@ -109,8 +176,9 @@ directory contains application preferences, never copied Codex credentials.
 Doctor runs on startup, after **Save and check**, and on request. It checks
 configuration, credential-file safety, the Codex ChatGPT session, microphone
 availability/format, tray, clipboard service, and HTTPS reachability. Errors
-open Doctor; its **Settings…** button opens preferences for repair. The app stays running. Checks are asynchronous
-where they involve network or child processes, and have bounded timeouts.
+open Doctor; its **Settings…** button opens preferences for repair. The app stays
+running. Checks are asynchronous where they involve network or child processes,
+and have bounded timeouts.
 Doctor does not record, overwrite the clipboard, or upload audio: a successful
 recording is still needed to verify microphone capture and transcription access.
 The HTTPS check reports **Server reachable.** when the server responds, including
@@ -126,22 +194,47 @@ The only child process is Codex's app-server, used by doctor to check the login
 without forcing refresh, and after an HTTP 401 to refresh expired authentication.
 Both use the selected Codex home. All HTTP work is asynchronous Qt networking.
 
-## Installation and optional autostart
+## Updating and optional autostart
+
+To update an installation, exit the running tray app, then run from this checkout:
 
 ```sh
-uv tool install --python 3.13 .
+git pull --ff-only
+uv tool install --force --python 3.13 .
 codex-stt-tray
 ```
-
-After updating this checkout, exit the running app and reinstall with
-`uv tool install --force --python 3.13 .`, then launch it again. During development,
-`uv run codex-stt-tray` runs directly from the checkout.
 
 `packaging/codex-stt-tray.desktop` is a launcher template. Install it in
 `~/.local/share/applications/` after setting `Exec` to the absolute installed
 executable path if your desktop PATH does not include uv's tool directory.
 For opt-in login startup, place the configured launcher in `~/.config/autostart/`.
 The app does not enable autostart itself.
+
+## Development
+
+```sh
+uv sync --python 3.13
+uv run codex-stt-tray
+QT_QPA_PLATFORM=offscreen uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv build
+```
+
+Python is pinned to 3.13 for development; the package requires Python >=3.13.
+The lockfile records the dependency versions. PySide6 provides the application framework.
+Linux desktop Qt libraries and a working audio server are also required.
+python-xlib provides native X11 keyboard integration.
+
+To regenerate the documentation screenshots with isolated example data:
+
+```sh
+uv run --frozen python scripts/capture_screenshots.py
+```
+
+The capture script uses actual widgets offscreen. It does not read your settings
+or credentials, open the microphone, change the desktop clipboard, or run Doctor.
+See [screenshot details](docs/screenshots/README.md).
 
 ## Validation
 
