@@ -12,7 +12,8 @@ from .silence import TrimOptions
 
 
 class Settings:
-    def __init__(self):
+    def __init__(self, *, x11=False):
+        self.x11 = x11
         root = Path(os.environ.get("XDG_CONFIG_HOME", "~/.config")).expanduser()
         if not root.is_absolute():
             root = Path.home() / ".config"
@@ -82,7 +83,7 @@ class Settings:
 
     @property
     def auto_paste(self) -> bool:
-        return str(self.store.value("auto_paste", "false")).lower() == "true"
+        return str(self.store.value("auto_paste", self.x11)).lower() == "true"
 
     @auto_paste.setter
     def auto_paste(self, value: bool):
@@ -101,8 +102,8 @@ class Settings:
 
     @property
     def paste_keys(self) -> str:
-        value = str(self.store.value("paste_keys", "Ctrl+V"))
-        return value if value in ("Ctrl+V", "Ctrl+Shift+V", "Shift+Insert") else "Ctrl+V"
+        value = str(self.store.value("paste_keys", "Ctrl+Shift+V"))
+        return value if value in ("Ctrl+V", "Ctrl+Shift+V", "Shift+Insert") else "Ctrl+Shift+V"
 
     @paste_keys.setter
     def paste_keys(self, value: str):
@@ -110,7 +111,7 @@ class Settings:
 
     @property
     def recording_shortcut(self) -> str:
-        return str(self.store.value("recording_shortcut", ""))
+        return str(self.store.value("recording_shortcut", "Meta+C" if self.x11 else ""))
 
     @recording_shortcut.setter
     def recording_shortcut(self, value: str):
@@ -138,13 +139,14 @@ class Settings:
 
     @property
     def duration_limit(self) -> int:
+        default = MAX_RECORDING_SECONDS if self.x11 else DEFAULT_RECORDING_SECONDS
         try:
             return min(
                 MAX_RECORDING_SECONDS,
-                max(1, int(self.store.value("duration_limit", DEFAULT_RECORDING_SECONDS))),
+                max(1, int(self.store.value("duration_limit", default))),
             )
         except (ValueError, TypeError):
-            return DEFAULT_RECORDING_SECONDS
+            return default
 
     @duration_limit.setter
     def duration_limit(self, value: int):

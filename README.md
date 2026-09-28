@@ -6,12 +6,8 @@ is copied to the clipboard, followed by a green check and a quiet chime.
 
 ## Install and run
 
-**Requires Linux with a system tray and microphone, [uv](https://docs.astral.sh/uv/getting-started/installation/),
-Git, and [Codex CLI](https://learn.chatgpt.com/docs/codex/cli).**
-KDE Plasma on X11 is the primary target. The app uses Python 3.13+; uv can install
-Python for you. Automatic paste and recording shortcuts currently require X11.
-
-### 1. Install the tray application
+Requires Linux, [uv](https://docs.astral.sh/uv/getting-started/installation/),
+Git, and [Codex CLI](https://learn.chatgpt.com/docs/codex/cli). KDE/X11 is the primary target.
 
 ```sh
 git clone https://github.com/emsi/codex-stt-tray.git
@@ -19,80 +15,52 @@ cd codex-stt-tray
 uv tool install --python 3.13 .
 ```
 
-This installs the `codex-stt-tray` command in uv's tool environment; you do not
-need to activate a virtual environment. If the command is not on your `PATH`,
-run `uv tool update-shell` and open a new terminal.
-See [uv's tool installation guide](https://docs.astral.sh/uv/guides/tools/).
-
-### 2. Set up your Codex login
-
-**This app needs a ChatGPT login stored in a Codex credential file.**
-Keyring-only credentials and OpenAI Platform API keys are not supported by this app.
-
-In your Codex `config.toml` (normally `~/.codex/config.toml`), add or update this
-**top-level** setting, before any `[section]` headers. Preserve your other settings:
-
-```toml
-cli_auth_credentials_store = "file"
-```
-
-Then sign in through the browser and check the login:
-
-```sh
-codex login
-codex login status
-```
-
-Choose your ChatGPT account. If you previously used keyring storage, sign in again
-after setting file storage. The app requires `auth.json` to be owned by your user
-and readable/writable only by you (`0600`). If Doctor reports a permission issue:
-
-```sh
-chmod 600 "${CODEX_HOME:-$HOME/.codex}/auth.json"
-```
-
-Codex manages the credentials; the tray app never creates, copies, or edits them.
-See [OpenAI's Codex authentication documentation](https://learn.chatgpt.com/docs/auth).
-
-Using a different Codex home? Configure `config.toml` in that directory and run
-`CODEX_HOME=/path/to/codex-home codex login`. Select the same directory under
-**Settings → Codex → Codex home** in the tray app. The saved selection overrides
-`CODEX_HOME`; clearing the field restores the environment/default behavior.
-`CODEX_CLI_PATH` can point to a Codex executable outside your desktop's `PATH`.
-
-### 3. Launch and record
+Use your existing **file-based Codex ChatGPT login**, or sign in with `codex login`.
+**Using keyring?** We recommend a separate `~/.codex-try` home for this app;
+[set it up](#codex-login-details) and select it in **Settings → Codex → Codex home**.
+Then launch:
 
 ```sh
 codex-stt-tray
 ```
 
-Doctor runs automatically on startup. Right-click the tray icon to open
-**Settings…** or **Run doctor…**. Click the red icon to start recording, then
-click again to stop and transcribe. A green check and quiet chime signal that
-copying succeeded. Closing Settings or Doctor leaves the tray running.
+If the command is missing from `PATH`, run `uv tool update-shell` and open a new terminal.
 
-Configure the microphone and optional start/stop shortcut under **Recording**.
-Under **Delivery**, choose CLIPBOARD, PRIMARY, or both, and optionally enable
-keyboard or middle-click paste. Automatic paste and a recording shortcut are
-both disabled until you configure them.
+## How it works
 
-This uses an **internal, unsupported** Codex Desktop endpoint. Access and
-compatibility are not guaranteed. There is no Platform API-key or local-model
-fallback. See [the contract](docs/compatibility.md).
+**Record speech → transcribe → copy → paste.**
 
-[Application screenshots](#screenshots) · [Desktop behavior](#desktop-behavior) ·
-[Updating and autostart](#updating-and-optional-autostart) · [Development](#development)
+1. Click the red tray icon or press **Meta+C** (usually Super/Windows+C) to start
+   recording. Use the same action again to stop.
+2. The app trims quiet edges conservatively and sends the recording to the Codex
+   transcription service using your Codex ChatGPT login. It waits for the final text.
+3. It copies the transcript to **CLIPBOARD** and, on X11, automatically sends
+   **Ctrl+Shift+V** to the application focused when transcription finishes.
+   A green check and quiet chime indicate successful copying.
+
+New X11 installations default to **automatic paste on**, **Ctrl+Shift+V** for paste,
+**Meta+C** for start/stop, and a **3,000-second (50-minute)** recording limit.
+Existing saved preferences take precedence. The paste shortcut suits Konsole;
+choose another shortcut or middle-click for applications with different bindings.
+Settings also lets you copy to PRIMARY or both selections, disable automatic paste,
+and adjust recording controls. Outside X11, automatic paste and the global shortcut
+start disabled, and the recording limit defaults to five minutes.
+
+Doctor checks setup on startup. Right-click the tray for **Settings…**,
+**Run doctor…**, or **Exit**. Closing either window keeps the tray running.
+
+[Application screenshots](#screenshots) · [Codex login details](#codex-login-details) ·
+[Desktop behavior](#desktop-behavior) · [Updating](#updating-and-optional-autostart)
 
 ## Screenshots
 
-Actual application widgets, rendered with Qt's Fusion style and **example X11
-preferences and Doctor results**. Your desktop theme may differ. These examples
-show automatic paste and a recording shortcut enabled; both are off by default.
-Click a screenshot to see it at full size.
+Actual application widgets showing the **new X11 defaults**, a sample Codex home,
+and illustrative Doctor results. Your desktop theme may differ. Click a screenshot
+to see it at full size.
 
 | Recording settings | Clipboard and paste settings |
 | --- | --- |
-| [![Recording settings: microphone, recording limit, toggle shortcut, and conservative silence trimming](docs/screenshots/settings-recording.png)](docs/screenshots/settings-recording.png) | [![Delivery settings: CLIPBOARD and PRIMARY, automatic paste, and Ctrl+Shift+V](docs/screenshots/settings-delivery.png)](docs/screenshots/settings-delivery.png) |
+| [![Recording settings: microphone, recording limit, toggle shortcut, and conservative silence trimming](docs/screenshots/settings-recording.png)](docs/screenshots/settings-recording.png) | [![Delivery settings: CLIPBOARD, automatic paste, and Ctrl+Shift+V](docs/screenshots/settings-delivery.png)](docs/screenshots/settings-delivery.png) |
 
 | Codex home selection | Separate Doctor window |
 | --- | --- |
@@ -101,6 +69,58 @@ Click a screenshot to see it at full size.
 The tray menu provides recording controls, quick settings, Doctor, and Exit:
 
 [![Tray context menu with microphone, recording limit, chime, Settings, Doctor, and Exit](docs/screenshots/tray-menu.png)](docs/screenshots/tray-menu.png)
+
+## Codex login details
+
+The app requires a **ChatGPT login with file-based credentials**. It does not
+support keyring-only credentials or OpenAI Platform API keys.
+
+### If your usual Codex login uses keyring
+
+Use a separate **`~/.codex-try`** home for the tray app, leaving your normal Codex
+configuration and keyring login intact:
+
+```sh
+mkdir -p "$HOME/.codex-try"
+```
+
+Create or edit `~/.codex-try/config.toml` and set this at the **top level**, before
+any `[section]` headers:
+
+```toml
+cli_auth_credentials_store = "file"
+```
+
+Sign in using that home:
+
+```sh
+CODEX_HOME="$HOME/.codex-try" codex login
+CODEX_HOME="$HOME/.codex-try" codex login status
+```
+
+Select `~/.codex-try` in **Settings → Codex → Codex home**, then **Save and check**.
+Alternatively, launch with `CODEX_HOME="$HOME/.codex-try" codex-stt-tray` when no
+home is already saved in Settings. The directory is a recommendation, not a fixed
+application requirement.
+
+### If you already use file-based credentials
+
+Keep your existing Codex home (normally `~/.codex`). Its `config.toml` should have
+`cli_auth_credentials_store = "file"` at the top level. Sign in with `codex login`
+if needed; `codex login status` checks the selected login method.
+
+The saved Codex home overrides `CODEX_HOME`; clearing the Settings field restores
+the environment/default behavior. `CODEX_CLI_PATH` can specify a Codex executable
+outside the desktop's `PATH`. Doctor checks that `auth.json` is owned by your user
+and has mode `0600`. If it reports a permission issue, run `chmod 600` on
+`auth.json` **inside the home you selected**.
+
+Codex manages the credentials; the tray app never creates, copies, or edits them.
+See [OpenAI's authentication documentation](https://learn.chatgpt.com/docs/auth).
+
+The transcription endpoint is **internal and unsupported**. Access and compatibility
+are not guaranteed. There is no Platform API-key or local-model fallback.
+See [the contract](docs/compatibility.md).
 
 ## Desktop behavior
 
@@ -117,7 +137,7 @@ The tray menu provides recording controls, quick settings, Doctor, and Exit:
   The app writes only the selected destinations; Klipper's synchronization settings
   can independently mirror them. PRIMARY publication currently requires X11;
   unsupported selections are reported before any copy is attempted.
-- Optional automatic paste is disabled by default and supports X11. Choose
+- Automatic paste is enabled by default on X11, using **Ctrl+Shift+V**. Choose
   **Keyboard shortcut** (Ctrl+V, Ctrl+Shift+V, or Shift+Insert) or **Middle mouse
   click (PRIMARY)**. Existing keyboard preferences are preserved. Keyboard paste
   uses the application focused when transcription finishes; its configured shortcut
@@ -136,8 +156,8 @@ The tray menu provides recording controls, quick settings, Doctor, and Exit:
 - Set **Start / stop shortcut** in Settings to register one global X11 key
   combination. Clear it to disable. The same combination starts and stops;
   key repeats and activations while processing are ignored. Conflicts leave the
-  previous shortcut active and are reported in Settings. No shortcut is assigned
-  by default. Wayland global shortcuts are not implemented in this version.
+  previous shortcut active and are reported in Settings. New X11 installations
+  use **Meta+C** by default. Wayland global shortcuts are not implemented in this version.
 - Silence trimming is enabled by default and affects only the start and end.
   It uses a conservative −55 dBFS RMS threshold with 300 ms padding, retaining
   edge silence shorter than 500 ms and every pause between speech passages.
@@ -148,7 +168,8 @@ The tray menu provides recording controls, quick settings, Doctor, and Exit:
 - The tray also offers quick microphone and chime choices, and recording-limit
   presets of **3, 5, or 10 minutes**. **Custom…** opens Settings for any value
   from **1 to 3,000 seconds** (50 minutes). Quick choices persist immediately;
-  changing the microphone reruns doctor. The default remains five minutes.
+  changing the microphone reruns doctor. New X11 installations default to
+  **3,000 seconds**; other desktops default to five minutes.
 - Closing Settings, finishing a recording, or encountering an error keeps the
   tray running. Exit explicitly from the menu (or send SIGINT/SIGTERM).
 - One recording at a time; maximum 50 minutes. Capture uses mono 16-bit PCM

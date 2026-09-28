@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QApplication
 from . import __version__
 from .clipboard import Clipboard
 from .controller import Controller
-from .desktop_input import AutoPaste
+from .desktop_input import AutoPaste, supports_x11_input
 from .doctor import Doctor
 from .doctor_dialog import DoctorDialog
 from .feedback import Feedback
@@ -44,7 +44,7 @@ def main(argv=None) -> int:
             file=sys.stderr,
         )
         return 1
-    settings = Settings()
+    settings = Settings(x11=supports_x11_input())
     recorder = Recorder(app)
     transcriber = Transcriber(app, home_provider=lambda: settings.codex_home)
     clipboard = Clipboard(app, target_provider=lambda: settings.copy_target)

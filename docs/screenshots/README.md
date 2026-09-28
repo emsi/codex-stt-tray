@@ -6,10 +6,11 @@ example preferences, an anonymous `/home/demo` path, and illustrative readiness
 results. They do not represent a live transcription or an actual login check.
 X11 controls are enabled in the preview without connecting to an X11 display.
 
-The Recording screenshot uses Ctrl+Alt+R as an example toggle shortcut. The
-Delivery screenshot shows both copy destinations and Ctrl+Shift+V automatic
-paste enabled. Actual defaults have no recording shortcut, automatic paste
-disabled, and CLIPBOARD as the only copy destination.
+The screenshots show the new X11 defaults: Meta+C toggles recording, the limit
+is 3,000 seconds, and automatic Ctrl+Shift+V paste is enabled with CLIPBOARD as
+the copy destination. The Codex screenshot demonstrates the recommended separate
+`~/.codex-try` home for users whose usual Codex login uses keyring. Doctor's
+results are illustrative, not the output of a live readiness check.
 
 Regenerate from the project root:
 

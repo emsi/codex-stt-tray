@@ -76,3 +76,38 @@ def test_delivery_preferences_keep_old_defaults_and_validate_values():
     loaded.store.setValue("paste_method", "invalid")
     assert loaded.copy_target == CopyTarget.CLIPBOARD
     assert loaded.paste_method == PasteMethod.KEYBOARD
+
+
+def test_default_paste_key_preserves_explicit_preferences():
+    settings = Settings()
+    assert settings.paste_keys == "Ctrl+Shift+V"
+    settings.paste_keys = "Ctrl+V"
+    settings.sync()
+    assert Settings().paste_keys == "Ctrl+V"
+    settings.store.setValue("paste_keys", "invalid")
+    assert settings.paste_keys == "Ctrl+Shift+V"
+
+
+def test_new_x11_defaults_and_existing_opt_outs():
+    settings = Settings(x11=True)
+    assert settings.auto_paste
+    assert settings.paste_keys == "Ctrl+Shift+V"
+    assert settings.paste_method == PasteMethod.KEYBOARD
+    assert settings.copy_target == CopyTarget.CLIPBOARD
+    assert settings.recording_shortcut == "Meta+C"
+    assert settings.duration_limit == 3000
+    assert settings.volume == 0.1 and settings.trim_options == TrimOptions()
+    settings.auto_paste = False
+    settings.paste_keys = "Shift+Insert"
+    settings.recording_shortcut = ""
+    settings.duration_limit = 300
+    settings.sync()
+    loaded = Settings(x11=True)
+    assert not loaded.auto_paste and loaded.recording_shortcut == ""
+    assert loaded.paste_keys == "Shift+Insert" and loaded.duration_limit == 300
+
+
+def test_other_desktops_do_not_enable_x11_features():
+    settings = Settings(x11=False)
+    assert not settings.auto_paste and settings.recording_shortcut == ""
+    assert settings.duration_limit == 300

@@ -12,7 +12,7 @@ os.environ["QT_QPA_PLATFORM"] = "offscreen"
 os.environ["QT_SCALE_FACTOR"] = "2"
 
 from PySide6.QtCore import QObject, Signal  # noqa: E402
-from PySide6.QtGui import QFont, QKeySequence  # noqa: E402
+from PySide6.QtGui import QFont  # noqa: E402
 from PySide6.QtMultimedia import QMediaDevices  # noqa: E402
 from PySide6.QtWidgets import QApplication, QTabWidget  # noqa: E402
 
@@ -51,7 +51,7 @@ class PreviewDoctor(QObject):
         Check("Codex CLI", "ok", "Executable found."),
         Check("Microphone", "ok", "Available at 48000 Hz; capture is checked when recording."),
         Check("Codex session", "ok", "Codex reports a ChatGPT login for this home."),
-        Check("Clipboard", "ok", "CLIPBOARD and PRIMARY available; contents unchanged."),
+        Check("Clipboard", "ok", "CLIPBOARD available; contents unchanged."),
         Check("HTTPS", "ok", "Server reachable."),
     ]
 
@@ -67,15 +67,15 @@ def main():
     app.setFont(QFont("DejaVu Sans", 10))
     preferences = SimpleNamespace(
         path=Path("/home/demo/.config/codex-stt-tray/settings.ini"),
-        codex_home=Path("/home/demo/.codex"),
+        codex_home=Path("/home/demo/.codex-try"),
         device_id=b"",
         volume=0.1,
-        duration_limit=300,
-        copy_target=CopyTarget.BOTH,
+        duration_limit=3000,
+        copy_target=CopyTarget.CLIPBOARD,
         auto_paste=True,
         paste_method=PasteMethod.KEYBOARD,
         paste_keys="Ctrl+Shift+V",
-        recording_shortcut="Ctrl+Alt+R",
+        recording_shortcut="Meta+C",
         trim_options=TrimOptions(),
     )
 
@@ -94,7 +94,6 @@ def main():
     ):
         controller, doctor = PreviewController(), PreviewDoctor()
         settings = SettingsDialog(preferences, doctor, controller)
-        settings.hotkey.setKeySequence(QKeySequence("Ctrl+Alt+R"))
         tabs = settings.findChild(QTabWidget)
         for index, name in enumerate(("recording", "delivery", "codex")):
             tabs.setCurrentIndex(index)

@@ -21,6 +21,11 @@ from codex_stt_tray.doctor import Check
 from codex_stt_tray.doctor_dialog import DoctorDialog
 from codex_stt_tray.settings_dialog import SettingsDialog
 from codex_stt_tray.tray import Tray
+from codex_stt_tray import app as composition
+from codex_stt_tray.shortcuts import GlobalShortcut
+# Exercise X11 defaults without opening an X11 connection or grabbing real keys.
+composition.supports_x11_input = lambda: True
+GlobalShortcut.configure = lambda self, text: setattr(self, "test_binding", text)
 Doctor.run = lambda self: None  # No desktop/network readiness probes in this test.
 original_exec = QApplication.exec
 def run():
@@ -29,6 +34,10 @@ def run():
     assert tray is not None and not tray.icon().isNull()
     settings = next(w for w in app.topLevelWidgets() if isinstance(w, SettingsDialog))
     report = next(w for w in app.topLevelWidgets() if isinstance(w, DoctorDialog))
+    assert settings.settings.auto_paste
+    assert settings.settings.paste_keys == "Ctrl+Shift+V"
+    assert settings.settings.recording_shortcut == "Meta+C"
+    assert settings.settings.duration_limit == 3000
     tray.settings_requested.emit()
     assert settings.isVisible() and not report.isVisible()
     settings.home.setText("unsaved choice")

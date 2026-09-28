@@ -37,7 +37,11 @@ Errors permit explicit retry where useful, or discard/new recording. Only one
 recording is active. Start/stop toggles are ignored during transcription/copy.
 Recorder limits finalize and submit automatically, equivalent to pressing Stop.
 
-`settings` stores preferences in the dedicated XDG configuration directory.
+`settings` stores preferences in the dedicated XDG configuration directory. The
+composition root passes X11 capability into Settings; absent preferences then
+use automatic paste enabled, Ctrl+Shift+V, Meta+C, and a 3,000-second limit.
+Other desktops retain disabled input automation and a five-minute limit.
+Explicitly saved preferences, including disabled automation, are preserved.
 `settings_dialog` edits them in Recording, Delivery, and Codex tabs;
 `doctor_dialog` independently presents live results and a copyable report. Saving
 configuration invalidates old retry data; each transcription snapshots the
