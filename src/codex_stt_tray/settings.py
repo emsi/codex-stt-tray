@@ -7,6 +7,7 @@ from PySide6.QtCore import QSettings
 
 from .auth import codex_home
 from .constants import DEFAULT_RECORDING_SECONDS, MAX_RECORDING_SECONDS
+from .models import CopyTarget, PasteMethod
 from .silence import TrimOptions
 
 
@@ -69,12 +70,34 @@ class Settings:
         self.store.setValue("volume", min(1.0, max(0.0, value)))
 
     @property
+    def copy_target(self) -> CopyTarget:
+        try:
+            return CopyTarget(self.store.value("copy_target", CopyTarget.CLIPBOARD.value))
+        except (ValueError, TypeError):
+            return CopyTarget.CLIPBOARD
+
+    @copy_target.setter
+    def copy_target(self, value: CopyTarget):
+        self.store.setValue("copy_target", CopyTarget(value).value)
+
+    @property
     def auto_paste(self) -> bool:
         return str(self.store.value("auto_paste", "false")).lower() == "true"
 
     @auto_paste.setter
     def auto_paste(self, value: bool):
         self.store.setValue("auto_paste", bool(value))
+
+    @property
+    def paste_method(self) -> PasteMethod:
+        try:
+            return PasteMethod(self.store.value("paste_method", PasteMethod.KEYBOARD.value))
+        except (ValueError, TypeError):
+            return PasteMethod.KEYBOARD
+
+    @paste_method.setter
+    def paste_method(self, value: PasteMethod):
+        self.store.setValue("paste_method", PasteMethod(value).value)
 
     @property
     def paste_keys(self) -> str:

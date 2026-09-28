@@ -4,7 +4,23 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtDBus import QDBusConnection, QDBusMessage, QDBusPendingCallWatcher
 from PySide6.QtGui import QClipboard, QGuiApplication
 
-from .models import AppError, ErrorCode
+from .models import AppError, CopyTarget, ErrorCode
+
+
+def supports_primary():
+    # Background PRIMARY publication is supported and tested only on X11.
+    return (
+        QGuiApplication.platformName() == "xcb" and QGuiApplication.clipboard().supportsSelection()
+    )
+
+
+def target_modes(target):
+    modes = []
+    if target.includes_clipboard:
+        modes.append(QClipboard.Mode.Clipboard)
+    if target.includes_primary:
+        modes.append(QClipboard.Mode.Selection)
+    return modes
 
 
 class ClipboardJob(QObject):
@@ -12,14 +28,18 @@ class ClipboardJob(QObject):
     failed = Signal(object)
     finished = Signal()
 
-    def __init__(self, text: str, parent=None):
+    def __init__(self, text: str, parent=None, *, target=CopyTarget.CLIPBOARD):
         super().__init__(parent)
         self._text = text
         self.done = False
         self.watcher = None
+        self.target = CopyTarget(target)
 
     def start(self):
         if self.done:
+            return
+        if self.target.includes_primary and not supports_primary():
+            self._finish(False, "PRIMARY copying requires an X11 session with selection support.")
             return
         if QGuiApplication.platformName().startswith("wayland"):
             message = QDBusMessage.createMethodCall(
@@ -36,13 +56,18 @@ class ClipboardJob(QObject):
                 QTimer.singleShot(0, lambda: self._dbus_finished(self.watcher))
         else:
             clipboard = QGuiApplication.clipboard()
-            clipboard.setText(self._text, QClipboard.Mode.Clipboard)
-            self._finish(clipboard.text(QClipboard.Mode.Clipboard) == self._text)
+            try:
+                for mode in target_modes(self.target):
+                    clipboard.setText(self._text, mode)
+                ok = all(clipboard.text(mode) == self._text for mode in target_modes(self.target))
+            except Exception:
+                ok = False
+            self._finish(ok)
 
     def _dbus_finished(self, watcher):
         self._finish(watcher.reply().type() != QDBusMessage.MessageType.ErrorMessage)
 
-    def _finish(self, success: bool):
+    def _finish(self, success: bool, message=None):
         if self.done:
             return
         self.done = True
@@ -53,8 +78,9 @@ class ClipboardJob(QObject):
             self.failed.emit(
                 AppError(
                     ErrorCode.CLIPBOARD,
-                    "Cannot publish the clipboard. On KDE Wayland, enable "
-                    "the Clipboard applet (Klipper).",
+                    message
+                    or "Cannot publish all selected copy destinations. Retry copying. "
+                    "On KDE Wayland, enable the Clipboard applet (Klipper).",
                     "clipboard",
                     True,
                 )
@@ -70,7 +96,11 @@ class ClipboardJob(QObject):
 
 
 class Clipboard(QObject):
+    def __init__(self, parent=None, *, target_provider=lambda: CopyTarget.CLIPBOARD):
+        super().__init__(parent)
+        self.target_provider = target_provider
+
     def create_job(self, text: str) -> ClipboardJob:
-        job = ClipboardJob(text, self)
+        job = ClipboardJob(text, self, target=self.target_provider())
         job.finished.connect(job.deleteLater)
         return job

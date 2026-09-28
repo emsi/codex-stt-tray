@@ -9,7 +9,8 @@ from PySide6.QtWidgets import QApplication
 from Xlib import XK, X, display
 from Xlib.ext import xtest
 
-from .models import AppError, ErrorCode
+from .clipboard import supports_primary, target_modes
+from .models import AppError, ErrorCode, PasteMethod
 
 PASTE_KEYS = {
     "Ctrl+V": ("Control_L", "v"),
@@ -34,6 +35,39 @@ class X11Input:
 
     def keys_held(self):
         return any(self.display.query_keymap())
+
+    def buttons_held(self):
+        mask = self.display.screen().root.query_pointer().mask
+        return bool(
+            mask & (X.Button1Mask | X.Button2Mask | X.Button3Mask | X.Button4Mask | X.Button5Mask)
+        )
+
+    def pointer(self):
+        root = self.display.screen().root
+        pointer = root.query_pointer()
+        if not pointer.same_screen:
+            raise RuntimeError("Pointer is on another screen")
+        return (getattr(pointer.child, "id", 0), pointer.root_x, pointer.root_y)
+
+    def pointer_over_target(self, target, pointer):
+        # Match the root's pointer child to the focused window's outermost ancestor,
+        # accounting for window-manager frames and Qt child windows.
+        window = self.display.create_resource_object("window", target)
+        for _ in range(64):
+            tree = window.query_tree()
+            if tree.parent.id == tree.root.id:
+                return window.id == pointer[0]
+            window = tree.parent
+        return False
+
+    def middle_click(self):
+        if not self.display.has_extension("XTEST"):
+            raise RuntimeError("XTEST unavailable")
+        try:
+            xtest.fake_input(self.display, X.ButtonPress, 2)
+        finally:
+            xtest.fake_input(self.display, X.ButtonRelease, 2)
+            self.display.sync()
 
     def paste(self, sequence):
         if not self.display.has_extension("XTEST"):
@@ -70,12 +104,24 @@ class AutoPaste(QObject):
         self.expected = None
         self.target = None
         self.attempts = 0
+        self.pointer_target = None
+        self.copy_target = settings.copy_target
+        self.method = settings.paste_method
+        self.sequence = settings.paste_keys
         self.timer = QTimer(self, interval=50)
         self.timer.timeout.connect(self._attempt)
 
     def request(self, text):
         self.cancel()
         if not self.settings.auto_paste:
+            return
+        self.copy_target = self.settings.copy_target
+        self.method = self.settings.paste_method
+        self.sequence = self.settings.paste_keys
+        if self.method == PasteMethod.MIDDLE_CLICK and (
+            not self.copy_target.includes_primary or not supports_primary()
+        ):
+            self._fail("Middle-click paste requires copying to PRIMARY on X11.")
             return
         if not supports_x11_input():
             self._fail("Automatic paste requires an X11 desktop in this version.")
@@ -90,6 +136,13 @@ class AutoPaste(QObject):
             if not self.target:
                 self._fail("Automatic paste skipped because no application has keyboard focus.")
                 return
+            if self.method == PasteMethod.MIDDLE_CLICK:
+                self.pointer_target = self.backend.pointer()
+                if not self.backend.pointer_over_target(self.target, self.pointer_target):
+                    self._fail(
+                        "Middle-click skipped: point inside the focused application's text area."
+                    )
+                    return
         except Exception:
             self._fail("Cannot connect to X11 for automatic paste.")
             return
@@ -103,18 +156,31 @@ class AutoPaste(QObject):
             if (
                 QApplication.activeWindow() is not None
                 or self.backend.focus() != self.target
-                or QGuiApplication.clipboard().text() != self.expected
+                or any(
+                    QGuiApplication.clipboard().text(mode) != self.expected
+                    for mode in target_modes(self.copy_target)
+                )
             ):
                 self._fail("Automatic paste skipped because focus or clipboard contents changed.")
                 return
-            self.attempts += 1
-            if self.backend.keys_held():
-                if self.attempts >= 40:
-                    self._fail("Automatic paste skipped because keys are still held down.")
+            if self.method == PasteMethod.MIDDLE_CLICK and (
+                self.backend.pointer() != self.pointer_target
+            ):
+                self._fail("Middle-click skipped because the pointer moved.")
                 return
-            self.backend.paste(self.settings.paste_keys)
+            self.attempts += 1
+            if self.backend.keys_held() or self.backend.buttons_held():
+                if self.attempts >= 40:
+                    self._fail(
+                        "Automatic paste skipped because keys or mouse buttons are held down."
+                    )
+                return
+            if self.method == PasteMethod.MIDDLE_CLICK:
+                self.backend.middle_click()
+            else:
+                self.backend.paste(self.sequence)
         except Exception:
-            self._fail("Cannot send the automatic paste shortcut.")
+            self._fail("Cannot send the automatic paste input.")
             return
         self.cancel()
         self.sent.emit()
@@ -122,12 +188,15 @@ class AutoPaste(QObject):
     def _fail(self, message):
         self.cancel()
         self.failed.emit(
-            AppError(ErrorCode.PASTE, f"{message} The transcript stays on the clipboard.", "paste")
+            AppError(
+                ErrorCode.PASTE, f"{message} Copying completed before this paste attempt.", "paste"
+            )
         )
 
     def cancel(self):
         self.timer.stop()
         self.expected = self.target = None
+        self.pointer_target = None
         self.attempts = 0
 
     def shutdown(self):

@@ -215,7 +215,7 @@ class Tray(QSystemTrayIcon):
         errors = sum(row.status == "error" for row in rows)
         if errors and self.controller.state in (State.IDLE, State.ERROR):
             self.setIcon(state_icon(State.ERROR))
-            self._status(f"Doctor found {errors} issue(s) — open Settings")
+            self._status(f"Doctor found {errors} issue(s) — open Doctor")
 
     def _error(self, error):
         self._status(error.message)

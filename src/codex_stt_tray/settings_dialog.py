@@ -1,7 +1,7 @@
-"""A persistent settings window with non-invasive readiness diagnostics."""
+"""Editable preferences; diagnostics are displayed in a separate window."""
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QGuiApplication, QKeySequence
+from PySide6.QtGui import QKeySequence
 from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -17,29 +17,40 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
-    QTreeWidget,
-    QTreeWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from .clipboard import supports_primary
 from .constants import MAX_RECORDING_SECONDS
 from .desktop_input import PASTE_KEYS, supports_x11_input
-from .models import AppError
+from .models import AppError, CopyTarget, PasteMethod
 from .silence import TrimOptions
 
 
 class SettingsDialog(QDialog):
-    quit_requested = Signal()
+    doctor_requested = Signal()
 
     def __init__(self, settings, doctor, controller, parent=None, *, shortcuts=None):
         super().__init__(parent)
         self.settings, self.doctor, self.controller = settings, doctor, controller
         self.shortcuts = shortcuts
         self.setWindowTitle("Codex STT Tray — Settings")
-        self.resize(760, 740)
+        self.resize(620, 520)
         layout = QVBoxLayout(self)
-        form = QFormLayout()
+        tabs = QTabWidget()
+        forms = {}
+        for title in ("Recording", "Delivery", "Codex"):
+            form_widget = QWidget()
+            form = QFormLayout(form_widget)
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(form_widget)
+            tabs.addTab(scroll, title)
+            forms[title] = form
+        layout.addWidget(tabs)
+        form = forms["Codex"]
         self.home = QLineEdit()
         self.home.setPlaceholderText("Use CODEX_HOME from the environment, or ~/.codex")
         browse = QPushButton("Browse…")
@@ -54,28 +65,49 @@ class SettingsDialog(QDialog):
         )
         description.setWordWrap(True)
         form.addRow(description)
+        form = forms["Recording"]
         self.microphone = QComboBox()
         form.addRow("Microphone", self.microphone)
         self.volume = QComboBox()
         for label, value in (("Muted", 0.0), ("Quiet", 0.1), ("Normal", 0.25)):
             self.volume.addItem(label, value)
-        form.addRow("Completion chime", self.volume)
+        forms["Delivery"].addRow("Completion chime", self.volume)
         self.duration = QSpinBox()
         self.duration.setRange(1, MAX_RECORDING_SECONDS)
         self.duration.setSuffix(" seconds")
         form.addRow("Recording limit", self.duration)
+        form = forms["Delivery"]
+        self.copy_target = QComboBox()
+        for label, target in (
+            ("CLIPBOARD", CopyTarget.CLIPBOARD),
+            ("PRIMARY (mouse selection)", CopyTarget.PRIMARY),
+            ("CLIPBOARD and PRIMARY", CopyTarget.BOTH),
+        ):
+            self.copy_target.addItem(label, target.value)
+        form.addRow("Copy transcript to", self.copy_target)
         self.auto_paste = QCheckBox("Paste into the focused application after copying")
         self.auto_paste.setEnabled(supports_x11_input())
         form.addRow("Automatic paste", self.auto_paste)
+        self.paste_method = QComboBox()
+        self.paste_method.addItem("Keyboard shortcut", PasteMethod.KEYBOARD.value)
+        self.paste_method.addItem("Middle mouse click (PRIMARY)", PasteMethod.MIDDLE_CLICK.value)
+        form.addRow("Paste method", self.paste_method)
         self.paste_keys = QComboBox()
         self.paste_keys.addItems(PASTE_KEYS)
         form.addRow("Paste shortcut", self.paste_keys)
-        paste_note = QLabel(
-            "Uses the application focused when transcription finishes. "
-            "Ctrl+Shift+V is useful for terminals. X11 only in this version."
+        self.paste_note = QLabel()
+        self.paste_note.setWordWrap(True)
+        form.addRow(self.paste_note)
+        copy_note = QLabel(
+            "PRIMARY replaces the mouse selection and requires X11. "
+            "Clipboard managers may synchronize or retain either destination."
         )
-        paste_note.setWordWrap(True)
-        form.addRow(paste_note)
+        copy_note.setWordWrap(True)
+        form.addRow(copy_note)
+        self.auto_paste.toggled.connect(self._delivery_controls)
+        self.paste_method.currentIndexChanged.connect(self._delivery_controls)
+        self.copy_target.currentIndexChanged.connect(self._delivery_controls)
+        form = forms["Recording"]
         self.hotkey = QKeySequenceEdit()
         self.hotkey.setMaximumSequenceLength(1)
         self.hotkey.setClearButtonEnabled(True)
@@ -107,58 +139,36 @@ class SettingsDialog(QDialog):
         )
         trim_note.setWordWrap(True)
         form.addRow(trim_note)
-        form_widget = QWidget()
-        form_widget.setLayout(form)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(form_widget)
-        layout.addWidget(scroll, 3)
         self.location = QLabel(f"Application settings: {settings.path}")
         self.location.setTextFormat(Qt.TextFormat.PlainText)
         self.location.setWordWrap(True)
         self.location.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.location)
-        self.summary = QLabel("Doctor checks setup without recording or changing the clipboard.")
+        self.summary = QLabel()
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
-        report_row = QHBoxLayout()
-        report_row.addWidget(QLabel("Doctor results"))
-        report_row.addStretch()
-        self.copy_button = QPushButton("Copy report")
-        self.copy_button.clicked.connect(self.copy_report)
-        report_row.addWidget(self.copy_button)
-        layout.addLayout(report_row)
-        self.results = QTreeWidget()
-        self.results.setHeaderLabels(["Check", "Status", "Details"])
-        self.results.setRootIsDecorated(False)
-        self.results.setWordWrap(True)
-        layout.addWidget(self.results, 2)
-        self.notice = QLabel(
-            "A successful recording is still needed to verify server transcription access."
-        )
-        self.notice.setWordWrap(True)
-        layout.addWidget(self.notice)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         self.save_button = buttons.addButton(
             "Save and check", QDialogButtonBox.ButtonRole.ApplyRole
         )
-        self.check_button = buttons.addButton("Run doctor", QDialogButtonBox.ButtonRole.ActionRole)
-        exit_button = buttons.addButton("Exit app", QDialogButtonBox.ButtonRole.ActionRole)
-        exit_button.clicked.connect(self.quit_requested.emit)
+        doctor_button = buttons.addButton("Doctor…", QDialogButtonBox.ButtonRole.ActionRole)
+        doctor_button.clicked.connect(self.doctor_requested.emit)
         self.save_button.clicked.connect(self.save)
-        self.check_button.clicked.connect(self.check)
         buttons.rejected.connect(self.hide)
         layout.addWidget(buttons)
-        doctor.updated.connect(self._results)
-        doctor.finished.connect(self._completed)
-        doctor.running_changed.connect(self._checking)
         controller.changed.connect(lambda _: self._availability())
         self.load()
 
     def load(self):
+        self.summary.clear()
         self.home.setText(str(self.settings.codex_home))
+        self.copy_target.setCurrentIndex(self.copy_target.findData(self.settings.copy_target.value))
         self.auto_paste.setChecked(self.settings.auto_paste)
+        self.paste_method.setCurrentIndex(
+            self.paste_method.findData(self.settings.paste_method.value)
+        )
         self.paste_keys.setCurrentText(self.settings.paste_keys)
+        self._delivery_controls()
         self.hotkey.setKeySequence(QKeySequence(self.settings.recording_shortcut))
         trimming = self.settings.trim_options
         self.trim_silence.setChecked(trimming.enabled)
@@ -169,8 +179,7 @@ class SettingsDialog(QDialog):
         self.refresh_preference("device_id")
         self.refresh_preference("volume")
         self.refresh_preference("duration_limit")
-        self._results(self.doctor.results)
-        self._checking(self.doctor.running)
+        self._availability()
 
     def refresh_preference(self, name):
         """Reflect a tray edit without overwriting unrelated, unsaved dialog fields."""
@@ -222,8 +231,24 @@ class SettingsDialog(QDialog):
     def save(self):
         if self.controller.busy:
             return
+        target = CopyTarget(self.copy_target.currentData())
+        method = PasteMethod(self.paste_method.currentData())
+        if target.includes_primary and not supports_primary():
+            self.summary.setText("PRIMARY requires X11 selection support. Choose CLIPBOARD here.")
+            return
+        if (
+            self.auto_paste.isChecked()
+            and method == PasteMethod.MIDDLE_CLICK
+            and not target.includes_primary
+        ):
+            self.summary.setText("Middle-click paste requires PRIMARY or CLIPBOARD and PRIMARY.")
+            return
         sequence = self.hotkey.keySequence().toString(QKeySequence.SequenceFormat.PortableText)
-        if self.auto_paste.isChecked() and sequence == self.paste_keys.currentText():
+        if (
+            self.auto_paste.isChecked()
+            and method == PasteMethod.KEYBOARD
+            and sequence == self.paste_keys.currentText()
+        ):
             self.hotkey_status.setText(
                 "Choose a recording shortcut different from the paste shortcut."
             )
@@ -240,7 +265,9 @@ class SettingsDialog(QDialog):
         self.settings.device_id = self.microphone.currentData()
         self.settings.volume = self.volume.currentData()
         self.settings.duration_limit = self.duration.value()
+        self.settings.copy_target = CopyTarget(self.copy_target.currentData())
         self.settings.auto_paste = self.auto_paste.isChecked()
+        self.settings.paste_method = method
         self.settings.paste_keys = self.paste_keys.currentText()
         self.settings.trim_options = TrimOptions(
             self.trim_silence.isChecked(),
@@ -264,53 +291,24 @@ class SettingsDialog(QDialog):
             return
         # Invalidate retry audio/results associated with the previous configuration.
         self.controller.cancel()
+        self.summary.setText("Settings saved. Doctor is checking the saved configuration.")
+        self.doctor_requested.emit()
         self.doctor.run()
-
-    def check(self):
-        if not self.controller.busy:
-            self.doctor.run()
 
     def _availability(self):
         self.save_button.setEnabled(not self.controller.busy)
-        self.check_button.setEnabled(not self.controller.busy and not self.doctor.running)
 
-    def _checking(self, checking):
-        self._availability()
-        if checking:
-            self.summary.setText("Checking saved configuration…")
-
-    def _results(self, rows):
-        verified = any(row.name == "Transcription" and row.status == "ok" for row in rows)
-        self.notice.setText(
-            "Capture, transcription, and clipboard delivery succeeded in this app session."
-            if verified
-            else "A successful recording is still needed to verify server transcription access."
-        )
-        self.copy_button.setEnabled(bool(rows))
-        self.copy_button.setText("Copy report")
-        self.results.clear()
-        for row in rows:
-            self.results.addTopLevelItem(
-                QTreeWidgetItem([row.name, row.status.upper(), row.message])
-            )
-        self.results.resizeColumnToContents(0)
-        self.results.resizeColumnToContents(1)
-
-    def copy_report(self):
-        lines = ["Codex STT Tray — Doctor report", ""]
-        for index in range(self.results.topLevelItemCount()):
-            row = self.results.topLevelItem(index)
-            lines.append(f"[{row.text(1)}] {row.text(0)}: {row.text(2)}")
-        lines.extend(["", self.notice.text()])
-        # This is a user action in a focused window, so Qt can publish on Wayland too.
-        QGuiApplication.clipboard().setText("\n".join(lines))
-        self.copy_button.setText("Copied")
-
-    def _completed(self, rows):
-        self._results(rows)
-        errors = sum(row.status == "error" for row in rows)
-        self.summary.setText(
-            f"Doctor found {errors} issue(s). Fix them and check again. The tray stays running."
-            if errors
-            else "Readiness checks completed."
+    def _delivery_controls(self, *_):
+        keyboard = self.paste_method.currentData() == PasteMethod.KEYBOARD.value
+        enabled = self.auto_paste.isChecked() and supports_x11_input()
+        self.paste_method.setEnabled(enabled)
+        self.paste_keys.setEnabled(enabled and keyboard)
+        self.paste_note.setText(
+            "X11 only. Uses the application focused when transcription finishes. "
+            "The shortcut must paste from a selected copy destination. "
+            "Konsole's Ctrl+Shift+V and Shift+Insert use CLIPBOARD."
+            if keyboard
+            else "X11 only. Requires PRIMARY copying. Point at the text area in the focused "
+            "application before transcription finishes. The pointer is never moved; "
+            "movement while waiting cancels the click. Some applications intercept middle-click."
         )

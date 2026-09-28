@@ -13,6 +13,25 @@ class State(StrEnum):
     ERROR = auto()
 
 
+class CopyTarget(StrEnum):
+    CLIPBOARD = "clipboard"
+    PRIMARY = "primary"
+    BOTH = "both"
+
+    @property
+    def includes_primary(self):
+        return self in (self.PRIMARY, self.BOTH)
+
+    @property
+    def includes_clipboard(self):
+        return self in (self.CLIPBOARD, self.BOTH)
+
+
+class PasteMethod(StrEnum):
+    KEYBOARD = "keyboard"
+    MIDDLE_CLICK = "middle_click"
+
+
 class ErrorCode(StrEnum):
     INTERNAL = auto()
     AUDIO_DEVICE = auto()

@@ -1,7 +1,8 @@
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtMultimedia import QMediaDevices
 
-from codex_stt_tray.doctor import Check
+from codex_stt_tray import settings_dialog
+from codex_stt_tray.models import CopyTarget, PasteMethod
 from codex_stt_tray.settings import Settings
 from codex_stt_tray.settings_dialog import SettingsDialog
 
@@ -41,9 +42,7 @@ def test_save_persists_home_and_runs_doctor(qtbot, tmp_path):
     dialog.save_button.click()
     assert Settings().codex_home == selected
     assert doctor.checked == [selected]
-    doctor.finished.emit([Check("Credentials", "error", "Sign in first.")])
-    assert dialog.results.topLevelItemCount() == 1
-    assert "stays running" in dialog.summary.text()
+    assert not hasattr(dialog, "results")
 
 
 def test_settings_are_not_changed_mid_recording(qtbot, tmp_path):
@@ -82,3 +81,38 @@ def test_saved_microphone_is_selected_after_reopening(qtbot, monkeypatch):
     assert reopened.microphone.currentText() == "Synthetic USB microphone"
     assert reopened.microphone.count() == 2
     assert reopened.microphone.currentData() == bytes.fromhex("01020304")
+
+
+def test_middle_click_requires_primary_without_changing_preferences(qtbot, monkeypatch):
+    monkeypatch.setattr(settings_dialog, "supports_x11_input", lambda: True)
+    monkeypatch.setattr(settings_dialog, "supports_primary", lambda: True)
+    settings = Settings()
+    doctor = Doctor(settings)
+    dialog = SettingsDialog(settings, doctor, Controller())
+    qtbot.addWidget(dialog)
+    dialog.auto_paste.setChecked(True)
+    dialog.paste_method.setCurrentIndex(
+        dialog.paste_method.findData(PasteMethod.MIDDLE_CLICK.value)
+    )
+    assert not dialog.paste_keys.isEnabled()
+    dialog.save()
+    assert "requires PRIMARY" in dialog.summary.text()
+    assert not doctor.checked and not settings.auto_paste
+    dialog.copy_target.setCurrentIndex(dialog.copy_target.findData(CopyTarget.BOTH.value))
+    with qtbot.waitSignal(dialog.doctor_requested):
+        dialog.save()
+    assert settings.copy_target == CopyTarget.BOTH
+    assert settings.paste_method == PasteMethod.MIDDLE_CLICK
+    assert settings.auto_paste and doctor.checked
+
+
+def test_primary_cannot_be_silently_saved_on_unsupported_desktop(qtbot, monkeypatch):
+    monkeypatch.setattr(settings_dialog, "supports_primary", lambda: False)
+    settings = Settings()
+    doctor = Doctor(settings)
+    dialog = SettingsDialog(settings, doctor, Controller())
+    qtbot.addWidget(dialog)
+    dialog.copy_target.setCurrentIndex(dialog.copy_target.findData(CopyTarget.PRIMARY.value))
+    dialog.save()
+    assert settings.copy_target == CopyTarget.CLIPBOARD and not doctor.checked
+    assert "requires X11" in dialog.summary.text()

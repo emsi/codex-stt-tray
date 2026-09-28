@@ -9,7 +9,7 @@ from test_transcription import Manager
 
 from codex_stt_tray import doctor
 from codex_stt_tray.doctor import DoctorJob, configuration_check
-from codex_stt_tray.models import AppError, ErrorCode
+from codex_stt_tray.models import AppError, CopyTarget, ErrorCode
 
 
 class Session(QObject):
@@ -91,6 +91,16 @@ def test_doctor_deadline(qtbot, ready):
     assert job.checks["HTTPS"].status == "error"
 
 
+def test_doctor_checks_primary_support_without_copying(qtbot, ready, monkeypatch):
+    monkeypatch.setattr(doctor, "supports_primary", lambda: False)
+    manager = Manager([{"status": 403}])
+    job = DoctorJob(manager, ready, b"", copy_target=CopyTarget.PRIMARY)
+    job.start()
+    qtbot.waitUntil(lambda: job.done)
+    assert job.checks["Clipboard"].status == "error"
+    assert "PRIMARY" in job.checks["Clipboard"].message
+
+
 @pytest.mark.parametrize("status", [401, 403])
 def test_rejected_probe_does_not_claim_transcription_access(qtbot, ready, status):
     manager = Manager([{"status": status, "payload": b""}])
@@ -103,7 +113,7 @@ def test_rejected_probe_does_not_claim_transcription_access(qtbot, ready, status
 
 
 def test_real_transcription_verifies_current_home_across_doctor_runs(qtbot, qapp, ready):
-    settings = SimpleNamespace(codex_home=ready, device_id=b"")
+    settings = SimpleNamespace(codex_home=ready, device_id=b"", copy_target=CopyTarget.CLIPBOARD)
     service = doctor.Doctor(settings, qapp)
     service.manager = Manager([{"status": 403}, {"status": 403}, {"status": 403}])
     service.run()
@@ -135,7 +145,7 @@ def test_reject_keyring_and_invalid_config(tmp_path):
 
 
 def test_new_settings_cancel_old_doctor_and_ignore_its_results(qtbot, qapp, ready):
-    settings = SimpleNamespace(codex_home=ready, device_id=b"")
+    settings = SimpleNamespace(codex_home=ready, device_id=b"", copy_target=CopyTarget.CLIPBOARD)
     service = doctor.Doctor(settings, qapp)
     service.manager = Manager([{"delay": None}, {"status": 405}])
     finished = []

@@ -2,6 +2,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings
 
+from codex_stt_tray.models import CopyTarget, PasteMethod
 from codex_stt_tray.settings import Settings
 from codex_stt_tray.silence import TrimOptions
 
@@ -57,3 +58,21 @@ def test_input_and_trimming_preferences_persist():
     assert loaded.auto_paste and loaded.paste_keys == "Ctrl+Shift+V"
     assert loaded.recording_shortcut == "Ctrl+Alt+R"
     assert loaded.trim_options == TrimOptions(False, -60, 500)
+
+
+def test_delivery_preferences_keep_old_defaults_and_validate_values():
+    settings = Settings()
+    settings.paste_keys = "Ctrl+Shift+V"
+    assert settings.copy_target == CopyTarget.CLIPBOARD
+    assert settings.paste_method == PasteMethod.KEYBOARD
+    settings.copy_target = CopyTarget.BOTH
+    settings.paste_method = PasteMethod.MIDDLE_CLICK
+    settings.sync()
+    loaded = Settings()
+    assert loaded.copy_target == CopyTarget.BOTH
+    assert loaded.paste_method == PasteMethod.MIDDLE_CLICK
+    assert loaded.paste_keys == "Ctrl+Shift+V"
+    loaded.store.setValue("copy_target", "invalid")
+    loaded.store.setValue("paste_method", "invalid")
+    assert loaded.copy_target == CopyTarget.CLIPBOARD
+    assert loaded.paste_method == PasteMethod.KEYBOARD

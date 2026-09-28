@@ -12,6 +12,7 @@ from .clipboard import Clipboard
 from .controller import Controller
 from .desktop_input import AutoPaste
 from .doctor import Doctor
+from .doctor_dialog import DoctorDialog
 from .feedback import Feedback
 from .models import AppError, State
 from .recorder import Recorder
@@ -46,7 +47,7 @@ def main(argv=None) -> int:
     settings = Settings()
     recorder = Recorder(app)
     transcriber = Transcriber(app, home_provider=lambda: settings.codex_home)
-    clipboard = Clipboard(app)
+    clipboard = Clipboard(app, target_provider=lambda: settings.copy_target)
     controller = Controller(recorder, transcriber, clipboard, settings, app)
     feedback = Feedback(settings, app)
     controller.copied.connect(feedback.play)
@@ -61,6 +62,9 @@ def main(argv=None) -> int:
     shortcuts.activated.connect(controller.toggle)
     shortcuts.failed.connect(tray._error)
     dialog = SettingsDialog(settings, doctor, controller, shortcuts=shortcuts)
+    doctor_dialog = DoctorDialog(doctor, controller)
+    dialog.doctor_requested.connect(doctor_dialog.open_doctor)
+    doctor_dialog.settings_requested.connect(dialog.open_settings)
 
     def configure_shortcut():
         try:
@@ -83,14 +87,14 @@ def main(argv=None) -> int:
 
     def doctor_finished(rows):
         if any(row.status == "error" for row in rows):
-            dialog.open_settings()
+            doctor_dialog.open_doctor()
 
     doctor.finished.connect(doctor_finished)
 
     def check_setup():
         if not controller.busy:
-            dialog.open_settings()
-            doctor.run()
+            doctor_dialog.open_doctor()
+            doctor_dialog.check()
 
     tray.doctor_requested.connect(check_setup)
     app.setWindowIcon(tray.icon())
@@ -103,6 +107,7 @@ def main(argv=None) -> int:
         closing = True
         tray.hide()
         dialog.hide()
+        doctor_dialog.hide()
         auto_paste.shutdown()
         shortcuts.shutdown()
         controller.shutdown()
@@ -116,7 +121,6 @@ def main(argv=None) -> int:
     transcriber.idle.connect(quit_when_idle)
     doctor.idle.connect(quit_when_idle)
     tray.quit_requested.connect(request_quit)
-    dialog.quit_requested.connect(request_quit)
     app.aboutToQuit.connect(recorder.cancel)
     app.aboutToQuit.connect(settings.sync)
     signal.signal(signal.SIGINT, lambda *_: request_quit())

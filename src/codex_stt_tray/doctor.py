@@ -14,8 +14,9 @@ from PySide6.QtNetwork import QNetworkAccessManager, QNetworkReply, QNetworkRequ
 from PySide6.QtWidgets import QSystemTrayIcon
 
 from .auth import AuthRefresh, read_credentials
+from .clipboard import supports_primary
 from .constants import ENDPOINT
-from .models import AppError
+from .models import AppError, CopyTarget
 from .recorder import recording_format, selected_device
 
 
@@ -64,9 +65,18 @@ class DoctorJob(QObject):
     finished = Signal(object)
     settled = Signal()
 
-    def __init__(self, manager, home: Path, device_id: bytes, parent=None):
+    def __init__(
+        self,
+        manager,
+        home: Path,
+        device_id: bytes,
+        parent=None,
+        *,
+        copy_target=CopyTarget.CLIPBOARD,
+    ):
         super().__init__(parent)
         self.manager, self.home, self.device_id = manager, home, device_id
+        self.copy_target = copy_target
         self.checks = {}
         self.pending = {"session", "network", "clipboard"}
         self.done = False
@@ -160,9 +170,24 @@ class DoctorJob(QObject):
         self._network()
 
     def _clipboard(self):
+        if self.copy_target.includes_primary and not supports_primary():
+            self._report(
+                Check(
+                    "Clipboard",
+                    "error",
+                    "PRIMARY copying requires X11 selection support. "
+                    "Choose CLIPBOARD in Settings on other desktops.",
+                ),
+                "clipboard",
+            )
+            return
         if not QGuiApplication.platformName().startswith("wayland"):
             self._report(
-                Check("Clipboard", "ok", "Qt clipboard available; clipboard contents unchanged."),
+                Check(
+                    "Clipboard",
+                    "ok",
+                    f"{self.copy_target.value.upper()} available; contents unchanged.",
+                ),
                 "clipboard",
             )
             return
@@ -301,7 +326,13 @@ class Doctor(QObject):
     def run(self):
         if self.current:
             self.current.cancel()
-        job = DoctorJob(self.manager, self.settings.codex_home, self.settings.device_id, self)
+        job = DoctorJob(
+            self.manager,
+            self.settings.codex_home,
+            self.settings.device_id,
+            self,
+            copy_target=self.settings.copy_target,
+        )
         self.current = job
         self.jobs.add(job)
         job.updated.connect(lambda rows: self._updated(job, rows))
