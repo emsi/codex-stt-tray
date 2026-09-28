@@ -13,6 +13,7 @@ from .constants import (
     MAX_RECORDING_SECONDS,
 )
 from .models import AppError, AudioClip, ErrorCode
+from .silence import EdgeSilence, TrimOptions
 
 
 def wav_clip(pcm: bytes, rate: int, channels: int = 1) -> AudioClip:
@@ -72,6 +73,8 @@ class Recorder(QObject):
         self.starting = False
         self.stream = None
         self.pcm = bytearray()
+        self.trim_options = TrimOptions(enabled=False)
+        self.trimmer = None
         self.rate = 24000
         self.device_id = b""
         self.duration_limit = DEFAULT_RECORDING_SECONDS
@@ -90,6 +93,9 @@ class Recorder(QObject):
         self.device_id = bytes(device.id())
         self.duration_limit = min(MAX_RECORDING_SECONDS, max(1, duration_limit))
         self.byte_limit = min(MAX_AUDIO_BYTES - 44, self.duration_limit * self.rate * 2)
+        self.trimmer = (
+            EdgeSilence(self.rate, self.trim_options) if self.trim_options.enabled else None
+        )
         source = QAudioSource(device, fmt, self)
         self.source = source
         source.stateChanged.connect(self._audio_state)
@@ -120,6 +126,8 @@ class Recorder(QObject):
             if not chunk:
                 break
             self.pcm.extend(chunk)
+            if self.trimmer:
+                self.trimmer.feed(chunk)
         if len(self.pcm) >= self.byte_limit:
             source = self.source
             QTimer.singleShot(0, lambda: self.stop() if self.source is source else None)
@@ -182,14 +190,17 @@ class Recorder(QObject):
         self._drain()
         self._release_source()
         try:
-            clip = wav_clip(bytes(self.pcm), self.rate)
+            start, end = self.trimmer.bounds() if self.trimmer else (0, len(self.pcm))
+            clip = wav_clip(bytes(memoryview(self.pcm)[start:end]), self.rate)
         except AppError as error:
             self.failed.emit(error)
         else:
             self.clip_ready.emit(clip)
         finally:
             self.pcm.clear()
+            self.trimmer = None
 
     def cancel(self):
         self._release_source()
         self.pcm.clear()
+        self.trimmer = None

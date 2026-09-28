@@ -26,16 +26,19 @@ def parse_response(data: bytes) -> Transcript:
     try:
         payload = json.loads(data)
         text = payload[TEXT_FIELD]
-        if not isinstance(text, str) or not text.strip():
+        if text is not None and not isinstance(text, str):
             raise ValueError
-        text.encode("utf-8")
-        return Transcript(text.strip())
+        if isinstance(text, str):
+            text.encode("utf-8")
     except (ValueError, KeyError, TypeError, RecursionError):
         raise AppError(
             ErrorCode.RESPONSE_INVALID,
-            "The server returned an invalid or empty transcript.",
+            "Unexpected server response.",
             "transcription",
         ) from None
+    if text is None or not text.strip():
+        raise AppError(ErrorCode.RESPONSE_EMPTY, "No transcript returned.", "transcription")
+    return Transcript(text.strip())
 
 
 class TranscriptionJob(QObject):

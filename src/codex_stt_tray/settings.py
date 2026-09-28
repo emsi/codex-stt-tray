@@ -7,6 +7,7 @@ from PySide6.QtCore import QSettings
 
 from .auth import codex_home
 from .constants import DEFAULT_RECORDING_SECONDS, MAX_RECORDING_SECONDS
+from .silence import TrimOptions
 
 
 class Settings:
@@ -91,6 +92,26 @@ class Settings:
     @recording_shortcut.setter
     def recording_shortcut(self, value: str):
         self.store.setValue("recording_shortcut", value)
+
+    @property
+    def trim_options(self) -> TrimOptions:
+        def bounded(key, default, low, high):
+            try:
+                return min(high, max(low, int(self.store.value(key, default))))
+            except (TypeError, ValueError):
+                return default
+
+        return TrimOptions(
+            enabled=str(self.store.value("trim_silence", "true")).lower() == "true",
+            threshold_db=bounded("silence_threshold_db", -55, -70, -20),
+            padding_ms=bounded("silence_padding_ms", 300, 100, 1000),
+        )
+
+    @trim_options.setter
+    def trim_options(self, value: TrimOptions):
+        self.store.setValue("trim_silence", value.enabled)
+        self.store.setValue("silence_threshold_db", value.threshold_db)
+        self.store.setValue("silence_padding_ms", value.padding_ms)
 
     @property
     def duration_limit(self) -> int:

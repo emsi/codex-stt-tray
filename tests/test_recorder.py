@@ -9,6 +9,7 @@ from codex_stt_tray import recorder
 from codex_stt_tray.constants import MAX_AUDIO_BYTES
 from codex_stt_tray.models import AppError, ErrorCode
 from codex_stt_tray.recorder import Recorder, wav_clip
+from codex_stt_tray.silence import TrimOptions
 
 
 def test_wav_duration_and_framing():
@@ -107,6 +108,19 @@ def test_cancel_discards_and_does_not_emit(qtbot, fake_capture):
     capture.cancel()
     capture.stop()
     assert not clips and not capture.pcm
+
+
+def test_silent_recording_is_not_submitted_when_trimming_enabled(qtbot, fake_capture):
+    capture = Recorder()
+    capture.trim_options = TrimOptions()
+    clips, errors = [], []
+    capture.clip_ready.connect(clips.append)
+    capture.failed.connect(errors.append)
+    capture.start()
+    capture.stop()
+    assert not clips
+    assert errors[0].code == ErrorCode.NO_SPEECH
+    assert not capture.pcm and capture.trimmer is None
 
 
 def test_fifty_minute_capture_is_not_cut_short_by_byte_limit(qtbot, fake_capture, monkeypatch):

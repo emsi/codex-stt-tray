@@ -51,6 +51,13 @@ fallback. See [the contract](docs/compatibility.md).
   key repeats and activations while processing are ignored. Conflicts leave the
   previous shortcut active and are reported in Settings. No shortcut is assigned
   by default. Wayland global shortcuts are not implemented in this version.
+- Silence trimming is enabled by default and affects only the start and end.
+  It uses a conservative −55 dBFS RMS threshold with 300 ms padding, retaining
+  edge silence shorter than 500 ms and every pause between speech passages.
+  Disable it or adjust threshold/padding in Settings; lower thresholds preserve
+  quieter speech. Background noise may deliberately remain untrimmed. If every
+  frame falls below the threshold, the app reports **No speech detected** locally
+  and does not upload. This is an energy detector, not a speech recognition model.
 - The tray also offers quick microphone and chime choices, and recording-limit
   presets of **3, 5, or 10 minutes**. **Custom…** opens Settings for any value
   from **1 to 3,000 seconds** (50 minutes). Quick choices persist immediately;
@@ -114,6 +121,11 @@ For opt-in login startup, place the configured launcher in `~/.config/autostart/
 The app does not enable autostart itself.
 
 ## Validation
+
+**No transcript returned** means the server returned an empty or null transcript
+field. **Unexpected server response** means malformed JSON, a missing field, or
+an invalid field type/encoding. These failures do not log audio, response bodies,
+or transcript contents.
 
 Automated tests use synthetic audio, dummy credentials, fake transports, and
 local child processes. They do not read your Codex login or contact the STT

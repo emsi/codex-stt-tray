@@ -22,6 +22,10 @@ claims about server limits: 3,000 seconds of mono Int16 PCM at up to 48 kHz
 transcription deadline, 30-second refresh deadline, and one refresh/retry
 after HTTP 401. Redirects are errors, including redirects to the same host.
 Cookies are neither loaded nor saved. TLS validation stays enabled.
+Empty or null `text` is reported as **No transcript returned**; missing fields,
+invalid types/encoding, and malformed JSON are **Unexpected server response**.
+The success contract is unchanged: nonempty text is required. No response body
+or transcript is included in these diagnostics.
 The server's accepted recording length and payload size are not established;
 the local duration limit does not guarantee acceptance of equally long uploads.
 

@@ -15,15 +15,18 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QSpinBox,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
+    QWidget,
 )
 
 from .constants import MAX_RECORDING_SECONDS
 from .desktop_input import PASTE_KEYS, supports_x11_input
 from .models import AppError
+from .silence import TrimOptions
 
 
 class SettingsDialog(QDialog):
@@ -34,7 +37,7 @@ class SettingsDialog(QDialog):
         self.settings, self.doctor, self.controller = settings, doctor, controller
         self.shortcuts = shortcuts
         self.setWindowTitle("Codex STT Tray — Settings")
-        self.resize(720, 510)
+        self.resize(760, 740)
         layout = QVBoxLayout(self)
         form = QFormLayout()
         self.home = QLineEdit()
@@ -85,7 +88,31 @@ class SettingsDialog(QDialog):
         form.addRow(self.hotkey_status)
         if shortcuts:
             shortcuts.status_changed.connect(self.hotkey_status.setText)
-        layout.addLayout(form)
+        self.trim_silence = QCheckBox("Trim silence only at the beginning and end")
+        form.addRow("Silence trimming", self.trim_silence)
+        self.silence_threshold = QSpinBox()
+        self.silence_threshold.setRange(-70, -20)
+        self.silence_threshold.setSuffix(" dBFS")
+        self.silence_threshold.setToolTip("Lower values preserve quieter speech.")
+        form.addRow("Silence threshold", self.silence_threshold)
+        self.silence_padding = QSpinBox()
+        self.silence_padding.setRange(100, 1000)
+        self.silence_padding.setSuffix(" ms")
+        form.addRow("Speech edge padding", self.silence_padding)
+        self.trim_silence.toggled.connect(self.silence_threshold.setEnabled)
+        self.trim_silence.toggled.connect(self.silence_padding.setEnabled)
+        trim_note = QLabel(
+            "Conservative default: −55 dBFS with 300 ms padding. "
+            "Pauses within speech and edge silence shorter than 500 ms are kept."
+        )
+        trim_note.setWordWrap(True)
+        form.addRow(trim_note)
+        form_widget = QWidget()
+        form_widget.setLayout(form)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(form_widget)
+        layout.addWidget(scroll, 3)
         self.location = QLabel(f"Application settings: {settings.path}")
         self.location.setTextFormat(Qt.TextFormat.PlainText)
         self.location.setWordWrap(True)
@@ -105,7 +132,7 @@ class SettingsDialog(QDialog):
         self.results.setHeaderLabels(["Check", "Status", "Details"])
         self.results.setRootIsDecorated(False)
         self.results.setWordWrap(True)
-        layout.addWidget(self.results)
+        layout.addWidget(self.results, 2)
         self.notice = QLabel(
             "A successful recording is still needed to verify server transcription access."
         )
@@ -133,6 +160,12 @@ class SettingsDialog(QDialog):
         self.auto_paste.setChecked(self.settings.auto_paste)
         self.paste_keys.setCurrentText(self.settings.paste_keys)
         self.hotkey.setKeySequence(QKeySequence(self.settings.recording_shortcut))
+        trimming = self.settings.trim_options
+        self.trim_silence.setChecked(trimming.enabled)
+        self.silence_threshold.setValue(trimming.threshold_db)
+        self.silence_padding.setValue(trimming.padding_ms)
+        self.silence_threshold.setEnabled(trimming.enabled)
+        self.silence_padding.setEnabled(trimming.enabled)
         self.refresh_preference("device_id")
         self.refresh_preference("volume")
         self.refresh_preference("duration_limit")
@@ -209,6 +242,11 @@ class SettingsDialog(QDialog):
         self.settings.duration_limit = self.duration.value()
         self.settings.auto_paste = self.auto_paste.isChecked()
         self.settings.paste_keys = self.paste_keys.currentText()
+        self.settings.trim_options = TrimOptions(
+            self.trim_silence.isChecked(),
+            self.silence_threshold.value(),
+            self.silence_padding.value(),
+        )
         try:
             self.settings.sync()
         except OSError:

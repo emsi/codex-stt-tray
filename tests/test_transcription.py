@@ -112,14 +112,23 @@ def test_success_in_memory_and_contract(qtbot, credentials):
     assert len(outcomes) == 1
 
 
-@pytest.mark.parametrize(
-    "payload", [b"garbage", b"[]", b"{}", b'{"text":null}', b'{"text":"  "}', b"\xff"]
-)
+@pytest.mark.parametrize("payload", [b"garbage", b"[]", b"{}", b'{"text":42}', b"\xff", b""])
 def test_invalid_response(qtbot, credentials, payload):
     manager, job, outcomes = make_job(credentials, [{"payload": payload}])
     job.start()
     qtbot.waitUntil(lambda: job.done)
     assert outcomes[0].code == ErrorCode.RESPONSE_INVALID
+    assert outcomes[0].message == "Unexpected server response."
+
+
+@pytest.mark.parametrize("payload", [b'{"text":null}', b'{"text":""}', b'{"text":"  "}'])
+def test_empty_transcript_has_a_distinct_error(qtbot, credentials, payload):
+    manager, job, outcomes = make_job(credentials, [{"payload": payload}])
+    job.start()
+    qtbot.waitUntil(lambda: job.done)
+    assert outcomes[0].code == ErrorCode.RESPONSE_EMPTY
+    assert outcomes[0].message == "No transcript returned."
+    assert not job.body and job.clip is None
 
 
 @pytest.mark.parametrize("status,retryable", [(302, False), (403, False), (429, True), (503, True)])

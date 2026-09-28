@@ -12,6 +12,15 @@ until the request ends, limits response accumulation, and returns a Transcript.
 One manager permits connection reuse across jobs. `auth` performs a bounded
 incremental JSON-lines handshake and asynchronously terminates/reaps its child.
 
+Optional silence trimming tracks 20 ms frame energy during capture, retaining
+only first/last above-threshold sample boundaries and one incomplete frame.
+Stop slices one continuous PCM interval with configurable padding. It never
+removes internal pauses or auto-stops on silence. Edges shorter than 500 ms are
+kept; a wholly below-threshold capture fails locally without an upload. The
+default threshold is −55 dBFS with 300 ms padding; quiet speech can be protected
+by lowering it or disabling trimming. This is conservative energy gating, not
+a claim to distinguish every type of speech from background noise.
+
 `controller` owns state, retry data and job generations. Each job has one terminal
 outcome; stale callbacks cannot copy an old result. The controller discards audio
 after transcription and its transcript reference after successful copy. Failed

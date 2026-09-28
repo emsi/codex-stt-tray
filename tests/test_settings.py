@@ -3,6 +3,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings
 
 from codex_stt_tray.settings import Settings
+from codex_stt_tray.silence import TrimOptions
 
 
 def test_dedicated_directory_and_home_precedence(tmp_path, monkeypatch):
@@ -41,3 +42,18 @@ def test_relative_xdg_path_is_not_used(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", "relative")
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     assert Settings().directory == tmp_path / ".config/codex-stt-tray"
+
+
+def test_input_and_trimming_preferences_persist():
+    settings = Settings()
+    assert not settings.auto_paste and settings.recording_shortcut == ""
+    assert settings.trim_options == TrimOptions()
+    settings.auto_paste = True
+    settings.paste_keys = "Ctrl+Shift+V"
+    settings.recording_shortcut = "Ctrl+Alt+R"
+    settings.trim_options = TrimOptions(False, -60, 500)
+    settings.sync()
+    loaded = Settings()
+    assert loaded.auto_paste and loaded.paste_keys == "Ctrl+Shift+V"
+    assert loaded.recording_shortcut == "Ctrl+Alt+R"
+    assert loaded.trim_options == TrimOptions(False, -60, 500)

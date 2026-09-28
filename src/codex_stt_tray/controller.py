@@ -3,6 +3,7 @@
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from .models import AppError, ErrorCode, State
+from .silence import TrimOptions
 
 
 class Controller(QObject):
@@ -63,6 +64,9 @@ class Controller(QObject):
         self.cancel()
         self._set_state(State.RECORDING)
         try:
+            self.recorder.trim_options = getattr(
+                self.settings, "trim_options", TrimOptions(enabled=False)
+            )
             self.recorder.start(self.settings.device_id, self.settings.duration_limit)
         except AppError as error:
             self.recorder.cancel()
