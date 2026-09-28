@@ -116,3 +116,25 @@ def test_primary_cannot_be_silently_saved_on_unsupported_desktop(qtbot, monkeypa
     dialog.save()
     assert settings.copy_target == CopyTarget.CLIPBOARD and not doctor.checked
     assert "requires X11" in dialog.summary.text()
+
+
+def test_save_failure_restores_all_preferences(qtbot, monkeypatch):
+    monkeypatch.setattr(settings_dialog, "supports_primary", lambda: True)
+    settings = Settings()
+    settings.paste_keys = "Ctrl+Shift+V"
+    settings.codex_home = ""  # Preserve environment fallback, not its resolved path.
+    before = {key: settings.store.value(key) for key in settings.store.allKeys()}
+    doctor = Doctor(settings)
+    dialog = SettingsDialog(settings, doctor, Controller())
+    qtbot.addWidget(dialog)
+    dialog.copy_target.setCurrentIndex(dialog.copy_target.findData(CopyTarget.BOTH.value))
+    dialog.duration.setValue(600)
+
+    def fail():
+        raise OSError("synthetic error")
+
+    monkeypatch.setattr(settings, "sync", fail)
+    dialog.save()
+    assert {key: settings.store.value(key) for key in settings.store.allKeys()} == before
+    assert not doctor.checked
+    assert "Cannot save" in dialog.summary.text()

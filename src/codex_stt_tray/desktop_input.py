@@ -53,6 +53,12 @@ class X11Input:
         # Match the root's pointer child to the focused window's outermost ancestor,
         # accounting for window-manager frames and Qt child windows.
         window = self.display.create_resource_object("window", target)
+        position = window.query_pointer()
+        geometry = window.get_geometry()
+        if not position.same_screen or not (
+            0 <= position.win_x < geometry.width and 0 <= position.win_y < geometry.height
+        ):
+            return False
         for _ in range(64):
             tree = window.query_tree()
             if tree.parent.id == tree.root.id:
@@ -165,8 +171,9 @@ class AutoPaste(QObject):
                 return
             if self.method == PasteMethod.MIDDLE_CLICK and (
                 self.backend.pointer() != self.pointer_target
+                or not self.backend.pointer_over_target(self.target, self.pointer_target)
             ):
-                self._fail("Middle-click skipped because the pointer moved.")
+                self._fail("Middle-click skipped because the pointer or destination moved.")
                 return
             self.attempts += 1
             if self.backend.keys_held() or self.backend.buttons_held():

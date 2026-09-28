@@ -17,6 +17,9 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QSystemTrayIcon
 from codex_stt_tray.app import main
 from codex_stt_tray.doctor import Doctor
+from codex_stt_tray.doctor import Check
+from codex_stt_tray.doctor_dialog import DoctorDialog
+from codex_stt_tray.settings_dialog import SettingsDialog
 from codex_stt_tray.tray import Tray
 Doctor.run = lambda self: None  # No desktop/network readiness probes in this test.
 original_exec = QApplication.exec
@@ -24,6 +27,21 @@ def run():
     app = QApplication.instance()
     tray = app.findChild(Tray)
     assert tray is not None and not tray.icon().isNull()
+    settings = next(w for w in app.topLevelWidgets() if isinstance(w, SettingsDialog))
+    report = next(w for w in app.topLevelWidgets() if isinstance(w, DoctorDialog))
+    tray.settings_requested.emit()
+    assert settings.isVisible() and not report.isVisible()
+    settings.home.setText("unsaved choice")
+    tray.doctor_requested.emit()
+    assert report.isVisible() and settings.home.text() == "unsaved choice"
+    settings.close()
+    report.close()
+    app.findChild(Doctor).finished.emit([Check("Synthetic", "error", "Test error")])
+    assert report.isVisible() and not settings.isVisible()
+    report.settings_requested.emit()
+    assert settings.isVisible()
+    settings.close()
+    report.close()
     QTimer.singleShot(20, tray.quit_requested.emit)
     return original_exec()
 QApplication.exec = staticmethod(run)

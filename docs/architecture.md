@@ -38,7 +38,8 @@ recording is active. Start/stop toggles are ignored during transcription/copy.
 Recorder limits finalize and submit automatically, equivalent to pressing Stop.
 
 `settings` stores preferences in the dedicated XDG configuration directory.
-`settings_dialog` edits them and presents structured doctor results. Saving
+`settings_dialog` edits them in Recording, Delivery, and Codex tabs;
+`doctor_dialog` independently presents live results and a copyable report. Saving
 configuration invalidates old retry data; each transcription snapshots the
 selected Codex home, including any subsequent refresh of that request.
 
@@ -50,7 +51,7 @@ checks use account/read without forced refresh. An unauthenticated HEAD probes
 the fixed endpoint for HTTPS reachability only. Shutdown waits for diagnostic
 children as well as transcription children to finish.
 
-The application does not quit when its settings window closes, a recording
+The application does not quit when Settings or Doctor closes, a recording
 finishes, or an operation fails. Unexpected Python callback exceptions cancel
 the active operation and present a safe error without printing exception data.
 Microphone startup handles synchronous Qt error signals without destroying the
@@ -90,12 +91,30 @@ Manual checks, separately from the offline suite:
    refreshing, and rejection of a second app instance.
 7. Change Codex home in Settings; verify doctor reports missing/invalid setup
    without exiting, then save a working home and record again. Restart and check
-   persistence. Close Settings after a failed check and reopen it from the tray.
+   persistence. Close Doctor after a failed check and reopen it from the tray.
+8. X11: copy synthetic text to CLIPBOARD only, PRIMARY only, and both; verify
+   each selected destination and account for clipboard-manager synchronization.
+   Test keyboard paste with the receiving application's configured binding.
+9. X11 middle-click: point at a text area in the focused application, verify
+   PRIMARY insertion, and check cancellation on focus/pointer/selection changes.
+   Check held mouse buttons, window decorations, multiple windows, and terminals
+   with mouse reporting enabled. No pointer movement should be generated.
 
-Optional X11 automatic paste runs after successful clipboard publication. A Qt
-timer waits for key release and checks focus and clipboard contents before
-sending XTEST events. Failure is nonfatal and never retranscribes or retries
-paste automatically. A new operation cancels pending paste. No keyboard CLI is used.
+Clipboard jobs snapshot a typed copy target: CLIPBOARD, PRIMARY, or both.
+Qt publishes only those selections. PRIMARY is explicitly limited to X11;
+Wayland CLIPBOARD publication continues to use Klipper asynchronously. A partial
+copy failure is retryable and suppresses automatic paste, without undoing any
+successful publication. Doctor checks availability without changing selections.
+
+Optional X11 automatic paste snapshots its method and shortcut after successful
+publication. A Qt timer waits for key and mouse-button release, then checks focus
+and all selected destinations before sending XTEST events. Keyboard mode retains
+its existing shortcut behavior. Middle-click requires PRIMARY and validates that
+the pointer is inside the focused client's bounds, accounting for window-manager
+frames. The pointer is never moved. A pointer/destination change cancels the click.
+Neither method claims to verify insertion in the destination application. Failure
+is nonfatal and never retranscribes or retries paste automatically. A new operation
+cancels pending paste. No keyboard or clipboard CLI is used.
 
 The global X11 toggle uses passive key grabs on a separate persistent display
 connection, monitored by QSocketNotifier and a short timer for buffered events.

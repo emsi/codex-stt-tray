@@ -252,13 +252,16 @@ class SettingsDialog(QDialog):
             self.hotkey_status.setText(
                 "Choose a recording shortcut different from the paste shortcut."
             )
+            self.summary.setText(self.hotkey_status.text())
             return
         previous_shortcut = self.settings.recording_shortcut
+        previous = {key: self.settings.store.value(key) for key in self.settings.store.allKeys()}
         if self.shortcuts:
             try:
                 self.shortcuts.configure(sequence)
             except AppError as error:
                 self.hotkey_status.setText(error.message)
+                self.summary.setText(error.message)
                 return
         self.settings.recording_shortcut = sequence
         self.settings.codex_home = self.home.text()
@@ -277,7 +280,10 @@ class SettingsDialog(QDialog):
         try:
             self.settings.sync()
         except OSError:
-            self.settings.recording_shortcut = previous_shortcut
+            for key in set(self.settings.store.allKeys()) - previous.keys():
+                self.settings.store.remove(key)
+            for key, value in previous.items():
+                self.settings.store.setValue(key, value)
             if self.shortcuts:
                 try:
                     self.shortcuts.configure(previous_shortcut)

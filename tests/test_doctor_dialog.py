@@ -24,7 +24,7 @@ def test_report_remains_copyable_in_independent_window(qtbot, qapp):
     QGuiApplication.clipboard().clear()
 
 
-def test_doctor_checks_only_when_idle_and_opens_settings(qtbot):
+def test_doctor_checks_only_when_idle(qtbot):
     doctor = Doctor(Settings())
     controller = Controller()
     dialog = DoctorDialog(doctor, controller)

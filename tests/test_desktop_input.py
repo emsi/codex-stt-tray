@@ -190,3 +190,22 @@ def test_native_middle_click_releases_button_after_error(monkeypatch):
     with pytest.raises(RuntimeError):
         native.middle_click()
     assert events == [(X.ButtonPress, 2), (X.ButtonRelease, 2)]
+
+
+@pytest.mark.parametrize(
+    "x,y,expected", [(20, 30, True), (-2, 30, False), (20, -5, False), (100, 30, False)]
+)
+def test_pointer_must_be_inside_client_not_window_decorations(x, y, expected):
+    from codex_stt_tray.desktop_input import X11Input
+
+    root = SimpleNamespace(id=1)
+    frame = SimpleNamespace(id=50, query_tree=lambda: SimpleNamespace(parent=root, root=root))
+    client = SimpleNamespace(
+        id=99,
+        query_pointer=lambda: SimpleNamespace(same_screen=True, win_x=x, win_y=y),
+        get_geometry=lambda: SimpleNamespace(width=100, height=100),
+        query_tree=lambda: SimpleNamespace(parent=frame, root=root),
+    )
+    native = object.__new__(X11Input)
+    native.display = SimpleNamespace(create_resource_object=lambda *_: client)
+    assert native.pointer_over_target(99, (50, 400, 300)) is expected

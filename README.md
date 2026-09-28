@@ -41,11 +41,31 @@ fallback. See [the contract](docs/compatibility.md).
 - Amber animation: uploading/transcribing/copying. Green check: copied.
 - Warning icon: failure; use the context menu to retry or discard.
 - Right-click: start/stop, cancel, retry, **Settings…**, **Run doctor…**, **Exit**.
-- Settings configures Codex home, microphone, recording limit, and chime volume.
-- Optional automatic paste sends Ctrl+V, Ctrl+Shift+V, or Shift+Insert to the
-  focused application after copying. It is disabled by default and currently
-  supports X11 only. If focus or clipboard contents change while waiting for
-  held keys to be released, paste is skipped. Clipboard copying still succeeds.
+- Settings has compact **Recording**, **Delivery**, and **Codex** tabs.
+  **Doctor** is a separate window with readiness results, **Copy report**, and
+  a button to open Settings. Closing either window keeps the tray running.
+- **Delivery → Copy transcript to** selects **CLIPBOARD**, **PRIMARY**, or both.
+  The default remains CLIPBOARD, preserving existing installations. PRIMARY is
+  the X11 mouse selection: replacing it affects subsequent middle-click pastes.
+  The app writes only the selected destinations; Klipper's synchronization settings
+  can independently mirror them. PRIMARY publication currently requires X11;
+  unsupported selections are reported before any copy is attempted.
+- Optional automatic paste is disabled by default and supports X11. Choose
+  **Keyboard shortcut** (Ctrl+V, Ctrl+Shift+V, or Shift+Insert) or **Middle mouse
+  click (PRIMARY)**. Existing keyboard preferences are preserved. Keyboard paste
+  uses the application focused when transcription finishes; its configured shortcut
+  must read a selected destination. Konsole's default Ctrl+Shift+V and Shift+Insert
+  both read CLIPBOARD. The tray cannot determine an application's custom bindings.
+- Middle-click requires copying to PRIMARY (alone or with CLIPBOARD). Place the
+  pointer over the intended text area in the focused application before transcription
+  finishes. The app does not move the pointer or change focus. It skips the click
+  if the pointer is outside that client's bounds, on window decorations, or moves
+  while waiting. Applications may intercept middle-click or configure it to use
+  another selection; the app requests a click, not confirmed text insertion.
+- Both paste methods wait up to two seconds for held keys and mouse buttons to
+  be released. Changes to focus or the published selections cancel the pending
+  paste. A failed paste is not retried automatically; successful copying remains
+  independent of paste activation.
 - Set **Start / stop shortcut** in Settings to register one global X11 key
   combination. Clear it to disable. The same combination starts and stops;
   key repeats and activations while processing are ignored. Conflicts leave the
@@ -70,7 +90,9 @@ fallback. See [the contract](docs/compatibility.md).
 - Audio stays in bounded memory. No recording or transcript files are written.
 - On retryable failure, the pending audio or transcript is kept in memory for
   up to five minutes, or until discarded, replaced, or the app exits.
-- The normal clipboard is replaced only after successful transcription.
+- Selected copy destinations are replaced only after successful transcription.
+  If publication to both partially fails, the app reports a retryable copy error
+  and does not attempt automatic paste; the successful write is not rolled back.
   Clipboard managers such as Klipper may save copied text in their history.
 - KDE Wayland requires the Clipboard applet (Klipper). Its native D-Bus API
   publishes the clipboard without opening a window or running a clipboard CLI.
@@ -87,7 +109,7 @@ directory contains application preferences, never copied Codex credentials.
 Doctor runs on startup, after **Save and check**, and on request. It checks
 configuration, credential-file safety, the Codex ChatGPT session, microphone
 availability/format, tray, clipboard service, and HTTPS reachability. Errors
-open Settings for repair and keep the app running. Checks are asynchronous
+open Doctor; its **Settings…** button opens preferences for repair. The app stays running. Checks are asynchronous
 where they involve network or child processes, and have bounded timeouts.
 Doctor does not record, overwrite the clipboard, or upload audio: a successful
 recording is still needed to verify microphone capture and transcription access.
@@ -96,8 +118,9 @@ HTTP 401/403 from the unauthenticated probe. Authentication is checked separatel
 After a real recording is transcribed and copied, doctor marks transcription
 as verified for that Codex home during the current app session. This status does
 not carry over to a different Codex home or survive an application restart.
-Use **Copy report** in Settings to copy all displayed doctor results as plain
-text for pasting into a message or issue.
+Use **Copy report** in Doctor to copy all displayed doctor results as plain
+text for pasting into a message or issue. Report copying always uses CLIPBOARD,
+independently of the transcript delivery preference.
 
 The only child process is Codex's app-server, used by doctor to check the login
 without forcing refresh, and after an HTTP 401 to refresh expired authentication.

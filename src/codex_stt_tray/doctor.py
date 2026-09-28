@@ -182,11 +182,16 @@ class DoctorJob(QObject):
             )
             return
         if not QGuiApplication.platformName().startswith("wayland"):
+            label = (
+                "CLIPBOARD and PRIMARY"
+                if self.copy_target == CopyTarget.BOTH
+                else self.copy_target.value.upper()
+            )
             self._report(
                 Check(
                     "Clipboard",
                     "ok",
-                    f"{self.copy_target.value.upper()} available; contents unchanged.",
+                    f"{label} available; contents unchanged.",
                 ),
                 "clipboard",
             )
