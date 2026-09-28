@@ -1,7 +1,7 @@
 """A persistent settings window with non-invasive readiness diagnostics."""
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QKeySequence
 from PySide6.QtMultimedia import QMediaDevices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QKeySequenceEdit,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -22,14 +23,16 @@ from PySide6.QtWidgets import (
 
 from .constants import MAX_RECORDING_SECONDS
 from .desktop_input import PASTE_KEYS, supports_x11_input
+from .models import AppError
 
 
 class SettingsDialog(QDialog):
     quit_requested = Signal()
 
-    def __init__(self, settings, doctor, controller, parent=None):
+    def __init__(self, settings, doctor, controller, parent=None, *, shortcuts=None):
         super().__init__(parent)
         self.settings, self.doctor, self.controller = settings, doctor, controller
+        self.shortcuts = shortcuts
         self.setWindowTitle("Codex STT Tray — Settings")
         self.resize(720, 510)
         layout = QVBoxLayout(self)
@@ -70,6 +73,18 @@ class SettingsDialog(QDialog):
         )
         paste_note.setWordWrap(True)
         form.addRow(paste_note)
+        self.hotkey = QKeySequenceEdit()
+        self.hotkey.setMaximumSequenceLength(1)
+        self.hotkey.setClearButtonEnabled(True)
+        self.hotkey.setEnabled(supports_x11_input())
+        form.addRow("Start / stop shortcut", self.hotkey)
+        self.hotkey_status = QLabel(
+            "Same combination starts and stops recording. Clear to disable."
+        )
+        self.hotkey_status.setWordWrap(True)
+        form.addRow(self.hotkey_status)
+        if shortcuts:
+            shortcuts.status_changed.connect(self.hotkey_status.setText)
         layout.addLayout(form)
         self.location = QLabel(f"Application settings: {settings.path}")
         self.location.setTextFormat(Qt.TextFormat.PlainText)
@@ -117,6 +132,7 @@ class SettingsDialog(QDialog):
         self.home.setText(str(self.settings.codex_home))
         self.auto_paste.setChecked(self.settings.auto_paste)
         self.paste_keys.setCurrentText(self.settings.paste_keys)
+        self.hotkey.setKeySequence(QKeySequence(self.settings.recording_shortcut))
         self.refresh_preference("device_id")
         self.refresh_preference("volume")
         self.refresh_preference("duration_limit")
@@ -173,6 +189,20 @@ class SettingsDialog(QDialog):
     def save(self):
         if self.controller.busy:
             return
+        sequence = self.hotkey.keySequence().toString(QKeySequence.SequenceFormat.PortableText)
+        if self.auto_paste.isChecked() and sequence == self.paste_keys.currentText():
+            self.hotkey_status.setText(
+                "Choose a recording shortcut different from the paste shortcut."
+            )
+            return
+        previous_shortcut = self.settings.recording_shortcut
+        if self.shortcuts:
+            try:
+                self.shortcuts.configure(sequence)
+            except AppError as error:
+                self.hotkey_status.setText(error.message)
+                return
+        self.settings.recording_shortcut = sequence
         self.settings.codex_home = self.home.text()
         self.settings.device_id = self.microphone.currentData()
         self.settings.volume = self.volume.currentData()
@@ -182,6 +212,14 @@ class SettingsDialog(QDialog):
         try:
             self.settings.sync()
         except OSError:
+            self.settings.recording_shortcut = previous_shortcut
+            if self.shortcuts:
+                try:
+                    self.shortcuts.configure(previous_shortcut)
+                except AppError:
+                    self.hotkey_status.setText(
+                        "Cannot restore the previous shortcut. Save again to retry."
+                    )
             self.summary.setText(
                 "Cannot save settings. Check permissions on the application settings directory."
             )

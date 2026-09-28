@@ -50,7 +50,7 @@ class Controller(QObject):
             return
         if self.state == State.RECORDING:
             self.recorder.stop()
-        elif self.state in (State.IDLE, State.COPIED):
+        elif self.state in (State.IDLE, State.COPIED, State.ERROR):
             self.start_recording()
 
     def start_recording(self):

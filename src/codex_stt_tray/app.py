@@ -13,10 +13,11 @@ from .controller import Controller
 from .desktop_input import AutoPaste
 from .doctor import Doctor
 from .feedback import Feedback
-from .models import State
+from .models import AppError, State
 from .recorder import Recorder
 from .settings import Settings
 from .settings_dialog import SettingsDialog
+from .shortcuts import GlobalShortcut
 from .transcription import Transcriber
 from .tray import Tray
 
@@ -56,7 +57,19 @@ def main(argv=None) -> int:
     auto_paste.failed.connect(tray._error)
     doctor = Doctor(settings, app)
     controller.copied.connect(doctor.record_transcription_success)
-    dialog = SettingsDialog(settings, doctor, controller)
+    shortcuts = GlobalShortcut(app)
+    shortcuts.activated.connect(controller.toggle)
+    shortcuts.failed.connect(tray._error)
+    dialog = SettingsDialog(settings, doctor, controller, shortcuts=shortcuts)
+
+    def configure_shortcut():
+        try:
+            shortcuts.configure(settings.recording_shortcut)
+        except AppError as error:
+            dialog.hotkey_status.setText(error.message)
+            dialog.open_settings()
+            tray._error(error)
+
     tray.settings_requested.connect(dialog.open_settings)
     tray.preference_changed.connect(dialog.refresh_preference)
 
@@ -91,6 +104,7 @@ def main(argv=None) -> int:
         tray.hide()
         dialog.hide()
         auto_paste.shutdown()
+        shortcuts.shutdown()
         controller.shutdown()
         doctor.shutdown()
         quit_when_idle()
@@ -130,6 +144,7 @@ def main(argv=None) -> int:
     sys.excepthook = unhandled
     tray.show()
     QTimer.singleShot(0, lambda: doctor.run() if not closing else None)
+    QTimer.singleShot(0, lambda: configure_shortcut() if not closing else None)
     result = app.exec()
     tray.hide()
     lock.unlock()

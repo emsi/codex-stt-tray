@@ -88,5 +88,10 @@ timer waits for key release and checks focus and clipboard contents before
 sending XTEST events. Failure is nonfatal and never retranscribes or retries
 paste automatically. A new operation cancels pending paste. No keyboard CLI is used.
 
-Global hotkeys, live transcription, alternative providers, and transcript history
-are outside the initial scope.
+The global X11 toggle uses passive key grabs on a separate persistent display
+connection, monitored by QSocketNotifier and a short timer for buffered events.
+Physical key state suppresses autorepeat. Conflicting reconfiguration rolls back
+new grabs and retains the old binding. Caps/Num/Scroll Lock variants are included.
+Bindings are released on shutdown. Wayland input integration is not implemented.
+
+Live transcription, alternative providers, and transcript history are outside scope.

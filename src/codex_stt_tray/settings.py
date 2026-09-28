@@ -85,6 +85,14 @@ class Settings:
         self.store.setValue("paste_keys", value)
 
     @property
+    def recording_shortcut(self) -> str:
+        return str(self.store.value("recording_shortcut", ""))
+
+    @recording_shortcut.setter
+    def recording_shortcut(self, value: str):
+        self.store.setValue("recording_shortcut", value)
+
+    @property
     def duration_limit(self) -> int:
         try:
             return min(

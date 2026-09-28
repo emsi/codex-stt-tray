@@ -30,6 +30,7 @@ class ErrorCode(StrEnum):
     RESPONSE_LIMIT = auto()
     CLIPBOARD = auto()
     PASTE = auto()
+    SHORTCUT = auto()
 
 
 @dataclass

@@ -46,6 +46,11 @@ fallback. See [the contract](docs/compatibility.md).
   focused application after copying. It is disabled by default and currently
   supports X11 only. If focus or clipboard contents change while waiting for
   held keys to be released, paste is skipped. Clipboard copying still succeeds.
+- Set **Start / stop shortcut** in Settings to register one global X11 key
+  combination. Clear it to disable. The same combination starts and stops;
+  key repeats and activations while processing are ignored. Conflicts leave the
+  previous shortcut active and are reported in Settings. No shortcut is assigned
+  by default. Wayland global shortcuts are not implemented in this version.
 - The tray also offers quick microphone and chime choices, and recording-limit
   presets of **3, 5, or 10 minutes**. **Custom…** opens Settings for any value
   from **1 to 3,000 seconds** (50 minutes). Quick choices persist immediately;
